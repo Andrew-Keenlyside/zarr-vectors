@@ -1,12 +1,12 @@
 # Template Convention Metadata
 
 - **UUID**: 00000000-0000-0000-0000-000000000000
-- **Name**: Template
-- **Schema URL**: "https://raw.githubusercontent.com/zarr-conventions/template/refs/tags/v1/schema.json"
-- **Spec URL**: "https://github.com/zarr-conventions/template/blob/v1/README.md"
+- **Name**: zarr-vectors
+- **Schema URL**: "Link to json / linkML in spec"
+- **Spec URL**: [Zarr Vectors Spec Repo](https://github.com/AllenInstitute/zarr_vectors)
 - **Scope**: Array, Group
-- **Extension Maturity Classification**: Proposal
-- **Owner**: @your-github-handle, @another-github-handle
+- **Extension Maturity Classification**: Candidate
+- **Owner**: @Andrew-Keenlyside @fcollman @AllenInstitute
 
 ## Description
 
