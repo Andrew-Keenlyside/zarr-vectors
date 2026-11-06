@@ -273,15 +273,15 @@ This section helps potential implementers assess the convention's maturity and a
 
 - **zarr-vectors-py**: reference reader, writer and validator (`zarr_vectors.validate`, conformance levels 1–5), with the authoritative LinkML schema at `schema/zarr_vectors.linkml.yaml`
   - Language: Python
-  - Repository: _TODO_
+  - Repository: https://github.com/AllenInstitute/zarr-vectors-py
   - Status: Experimental
-  - Maintainer: _TODO_
+  - Maintainer: @Andrew-Keenlyside, @fcollman
   - Since: format 0.9.2
 - **zarr-vectors-tools**: converters to and from TRX and other formats
   - Language: Python
-  - Repository: _TODO_
+  - Repository: https://github.com/AllenInstitute/zarr-vectors-tools
   - Status: Experimental
-  - Maintainer: _TODO_
+  - Maintainer: @Andrew-Keenlyside
 
 ### Datasets Using This Convention
 
