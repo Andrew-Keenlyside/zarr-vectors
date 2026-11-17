@@ -1,26 +1,22 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Zarr Vectors Convention",
-  "description": "Schema for the Zarr Vectors convention (format 0.9.2): spatially chunked, multi-resolution N-dimensional vector data (point clouds, meshes, skeletons, streamlines, graphs) stored in Zarr v3. Validates one node's zarr.json: the store root group, a resolution-level group, or a Zarr Vectors array / family group.",
+  "$id": "https://raw.githubusercontent.com/AllenInstitute/zarr-vectors-convention/refs/tags/v0.1.0/schema.json",
+  "title": "Zarr Vectors Convention v0.1.0",
+  "description": "Validates one node's zarr.json under the Zarr Vectors convention v0.1.0 (metadata for Zarr Vectors format 0.9.2). Every property lives under the single attribute key `zarr_vectors`, discriminated by `kind`. Rules that span several nodes (axis counts, bin divisibility, the derived_from chain, link offsets) are listed in the README and are not checked here.",
   "type": "object",
   "properties": {
     "zarr_format": {
-      "type": "integer",
-      "const": 3,
-      "description": "Zarr format version. Zarr Vectors requires Zarr v3."
+      "const": 3
     },
     "node_type": {
-      "type": "string",
-      "enum": ["array", "group"],
-      "description": "Type of Zarr node"
+      "enum": ["array", "group"]
     },
     "attributes": {
       "type": "object",
-      "description": "Zarr attributes containing convention metadata and properties",
       "properties": {
         "zarr_conventions": {
           "type": "array",
-          "description": "Array of convention metadata objects. Exactly one entry identifies Zarr Vectors, and every field it carries must match.",
+          "description": "Exactly one entry identifies Zarr Vectors; any entry carrying its uuid or name must match in full.",
           "contains": {
             "$ref": "#/$defs/conventionMetadata"
           },
@@ -31,214 +27,834 @@
               "anyOf": [
                 {
                   "properties": {
-                    "uuid": { "const": "66268a61-7833-4995-bbcb-233bb417dae5" }
+                    "uuid": {
+                      "const": "66268a61-7833-4995-bbcb-233bb417dae5"
+                    }
                   },
-                  "required": ["uuid"]
+                  "required": ["uuid"],
+                  "type": "object"
                 },
                 {
-                  "properties": { "name": { "const": "zarr_vectors" } },
-                  "required": ["name"]
+                  "properties": {
+                    "name": {
+                      "const": "zarr_vectors"
+                    }
+                  },
+                  "required": ["name"],
+                  "type": "object"
                 }
               ]
             },
-            "then": { "$ref": "#/$defs/conventionMetadata" }
+            "then": {
+              "$ref": "#/$defs/conventionMetadata"
+            }
           }
+        },
+        "zarr_vectors": {
+          "$ref": "#/$defs/zarrVectors"
         }
       },
-      "required": ["zarr_conventions"],
-      "oneOf": [
-        {
-          "$ref": "#/$defs/rootAttributes"
-        },
-        {
-          "$ref": "#/$defs/levelAttributes"
-        },
-        {
-          "$ref": "#/$defs/arrayAttributes"
-        }
-      ]
+      "required": ["zarr_conventions", "zarr_vectors"]
     }
   },
   "required": ["zarr_format", "node_type", "attributes"],
-  "additionalProperties": true,
   "allOf": [
     {
       "if": {
-        "type": "object",
-        "properties": {
-          "attributes": {
-            "type": "object",
-            "anyOf": [
-              { "required": ["zarr_vectors"] },
-              { "required": ["zarr_vectors_level"] },
-              {
-                "properties": {
-                  "zv_array": {
-                    "enum": [
-                      "links_family",
-                      "link_attribute_family",
-                      "object_index"
-                    ]
-                  }
-                },
-                "required": ["zv_array"]
-              }
-            ]
-          }
-        },
-        "required": ["attributes"]
+        "$ref": "#/$defs/kindIs_groupKinds"
       },
       "then": {
-        "properties": { "node_type": { "const": "group" } }
+        "properties": {
+          "node_type": {
+            "const": "group"
+          }
+        },
+        "type": "object"
       }
     },
     {
       "if": {
-        "type": "object",
-        "properties": {
-          "attributes": {
-            "type": "object",
-            "properties": {
-              "zv_array": {
-                "enum": [
-                  "vertices",
-                  "vertex_fragments",
-                  "link_fragments",
-                  "links",
-                  "attribute",
-                  "fragment_attribute",
-                  "link_attribute",
-                  "object_attribute",
-                  "groups",
-                  "groupings_attribute"
-                ]
-              }
-            },
-            "required": ["zv_array"]
-          }
-        },
-        "required": ["attributes"]
+        "$ref": "#/$defs/kindIs_arrayKinds"
       },
       "then": {
-        "properties": { "node_type": { "const": "array" } }
+        "properties": {
+          "node_type": {
+            "const": "array"
+          }
+        },
+        "type": "object"
+      }
+    },
+    {
+      "if": {
+        "$ref": "#/$defs/kindIs_vlenKinds"
+      },
+      "then": {
+        "description": "Per-chunk arrays and `groups` use the zarr-extensions `bytes` data type (zarr-python spells it `variable_length_bytes`) with the `vlen-bytes` codec.",
+        "properties": {
+          "data_type": {
+            "enum": ["bytes", "variable_length_bytes"]
+          },
+          "codecs": {
+            "type": "array",
+            "contains": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "const": "vlen-bytes"
+                }
+              },
+              "required": ["name"]
+            }
+          }
+        },
+        "required": ["data_type", "codecs"],
+        "type": "object"
+      }
+    },
+    {
+      "if": {
+        "$ref": "#/$defs/kindIs_root"
+      },
+      "then": {
+        "properties": {
+          "attributes": {
+            "properties": {
+              "zarr_conventions": {
+                "contains": {
+                  "$ref": "#/$defs/multiscalesConventionMetadata"
+                },
+                "type": "array"
+              },
+              "multiscales": {
+                "$ref": "#/$defs/multiscales"
+              }
+            },
+            "required": ["multiscales"],
+            "type": "object"
+          }
+        },
+        "type": "object"
       }
     }
   ],
   "$defs": {
     "conventionMetadata": {
       "type": "object",
-      "description": "Zarr Vectors convention metadata object for use in the zarr_conventions array",
+      "description": "Convention Metadata Object for Zarr Vectors v0.1.0. On non-root nodes the uuid alone is enough.",
       "properties": {
         "schema_url": {
-          "type": "string",
-          "const": "https://raw.githubusercontent.com/Andrew-Keenlyside/zarr-vectors/refs/tags/v0.9.2/schema.json",
-          "description": "URL to the JSON Schema definition for this convention"
+          "const": "https://raw.githubusercontent.com/AllenInstitute/zarr-vectors-convention/refs/tags/v0.1.0/schema.json"
         },
         "spec_url": {
-          "type": "string",
-          "const": "https://github.com/Andrew-Keenlyside/zarr-vectors/blob/v0.9.2/README.md",
-          "description": "URL to the full specification document"
+          "const": "https://github.com/AllenInstitute/zarr-vectors-convention/blob/v0.1.0/README.md"
         },
         "uuid": {
-          "type": "string",
-          "const": "66268a61-7833-4995-bbcb-233bb417dae5",
-          "description": "UUID that permanently identifies this convention"
+          "const": "66268a61-7833-4995-bbcb-233bb417dae5"
         },
         "name": {
-          "type": "string",
-          "const": "zarr_vectors",
-          "description": "Human-readable name of the convention; matches the root nesting key"
+          "const": "zarr_vectors"
         },
         "description": {
-          "type": "string",
-          "const": "Spatially chunked, multi-resolution N-dimensional vector data (point clouds, meshes, skeletons, streamlines, graphs)",
-          "description": "Brief description of the convention's purpose and usage"
+          "const": "Spatially chunked, multi-resolution N-dimensional vector data (point clouds, meshes, skeletons, streamlines, graphs)"
         }
       },
       "anyOf": [
         {
-          "required": ["schema_url"]
+          "required": ["schema_url"],
+          "type": "object"
         },
         {
-          "required": ["spec_url"]
+          "required": ["spec_url"],
+          "type": "object"
         },
         {
-          "required": ["uuid"]
+          "required": ["uuid"],
+          "type": "object"
         }
       ],
       "additionalProperties": false
     },
-
-    "rootAttributes": {
+    "multiscalesConventionMetadata": {
       "type": "object",
-      "description": "Attributes of the store root group",
+      "description": "The registered multiscales convention (zarr-conventions/multiscales), identified by its uuid.",
       "properties": {
-        "zarr_conventions": true,
-        "zarr_vectors": {
-          "$ref": "#/$defs/rootMetadata"
-        },
-        "multiscales": {
-          "$ref": "#/$defs/ngffMultiscales"
+        "uuid": {
+          "const": "d35379db-88df-4056-af3a-620245f8e347"
         }
       },
-      "required": ["zarr_vectors", "multiscales"],
-      "not": {
-        "anyOf": [
-          { "required": ["zarr_vectors_level"] },
-          { "required": ["zv_array"] }
-        ]
+      "required": ["uuid"]
+    },
+    "kindIs_groupKinds": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "zarr_vectors": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "root",
+                    "level",
+                    "links_family",
+                    "link_attribute_family",
+                    "object_index"
+                  ]
+                }
+              },
+              "required": ["kind"]
+            }
+          },
+          "required": ["zarr_vectors"]
+        }
       },
+      "required": ["attributes"]
+    },
+    "kindIs_arrayKinds": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "zarr_vectors": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "vertices",
+                    "vertex_fragments",
+                    "link_fragments",
+                    "links",
+                    "vertex_attribute",
+                    "fragment_attribute",
+                    "link_attribute",
+                    "object_attribute",
+                    "groups",
+                    "group_attribute"
+                  ]
+                }
+              },
+              "required": ["kind"]
+            }
+          },
+          "required": ["zarr_vectors"]
+        }
+      },
+      "required": ["attributes"]
+    },
+    "kindIs_vlenKinds": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "zarr_vectors": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "vertices",
+                    "vertex_fragments",
+                    "link_fragments",
+                    "links",
+                    "vertex_attribute",
+                    "fragment_attribute",
+                    "link_attribute",
+                    "groups"
+                  ]
+                }
+              },
+              "required": ["kind"]
+            }
+          },
+          "required": ["zarr_vectors"]
+        }
+      },
+      "required": ["attributes"]
+    },
+    "kindIs_root": {
+      "type": "object",
+      "properties": {
+        "attributes": {
+          "type": "object",
+          "properties": {
+            "zarr_vectors": {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "root"
+                }
+              },
+              "required": ["kind"]
+            }
+          },
+          "required": ["zarr_vectors"]
+        }
+      },
+      "required": ["attributes"]
+    },
+    "zarrVectors": {
+      "type": "object",
+      "description": "The single nesting key. `kind` says what the node is; the remaining fields depend on it. Unknown fields are allowed and SHOULD be ignored; an unknown `kind` MUST be rejected.",
+      "properties": {
+        "kind": {
+          "enum": [
+            "root",
+            "level",
+            "vertices",
+            "vertex_fragments",
+            "link_fragments",
+            "links_family",
+            "links",
+            "vertex_attribute",
+            "fragment_attribute",
+            "link_attribute_family",
+            "link_attribute",
+            "object_index",
+            "object_attribute",
+            "groups",
+            "group_attribute"
+          ]
+        }
+      },
+      "required": ["kind"],
+      "allOf": [
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_root"
+          },
+          "then": {
+            "$ref": "#/$defs/rootMetadata"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_level"
+          },
+          "then": {
+            "$ref": "#/$defs/levelMetadata"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_perChunk"
+          },
+          "then": {
+            "$ref": "#/$defs/perChunkFields"
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": ["nonempty_chunks"],
+                  "type": "object"
+                },
+                {
+                  "required": ["chunk_grid_origin"],
+                  "type": "object"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_vertices"
+          },
+          "then": {
+            "properties": {
+              "dtype": {
+                "$ref": "#/$defs/dtype"
+              },
+              "encoding": {
+                "enum": ["raw", "draco"]
+              },
+              "compression_codec": {
+                "type": "string"
+              },
+              "shape": {
+                "type": "array",
+                "items": {
+                  "type": "integer"
+                }
+              }
+            },
+            "required": ["dtype", "encoding"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_fragmentIndex"
+          },
+          "then": {
+            "properties": {
+              "encoding": {
+                "const": "fragment_index_v1"
+              }
+            },
+            "required": ["encoding"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_links_family"
+          },
+          "then": {
+            "properties": {
+              "level_delta": {
+                "type": "integer"
+              },
+              "link_width": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "sid_ndim": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "directed": {
+                "type": "boolean"
+              },
+              "store": {
+                "enum": ["canonical", "duplicate"]
+              },
+              "num_links": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "num_physical_records": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": ["level_delta", "link_width", "directed", "store"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_links"
+          },
+          "then": {
+            "properties": {
+              "dtype": {
+                "$ref": "#/$defs/dtype"
+              },
+              "offsets": {
+                "$ref": "#/$defs/offsets"
+              },
+              "has_perm": {
+                "type": "boolean"
+              },
+              "link_width": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "level_delta": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "dtype",
+              "offsets",
+              "has_perm",
+              "link_width",
+              "level_delta"
+            ],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_rowAttribute"
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "dtype": {
+                "$ref": "#/$defs/dtype"
+              },
+              "row_shape": {
+                "$ref": "#/$defs/rowShape"
+              },
+              "channel_names": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "channel_dtype": {
+                "type": "string"
+              }
+            },
+            "required": ["name", "dtype", "row_shape"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_link_attribute_family"
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "level_delta": {
+                "type": "integer"
+              }
+            },
+            "required": ["name", "level_delta"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_link_attribute"
+          },
+          "then": {
+            "properties": {
+              "offsets": {
+                "$ref": "#/$defs/offsets"
+              },
+              "level_delta": {
+                "type": "integer"
+              }
+            },
+            "required": ["offsets", "level_delta"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_object_index"
+          },
+          "then": {
+            "properties": {
+              "num_objects": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "num_present": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sid_ndim": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "layout": {
+                "enum": ["vlen_manifests_v1", "vlen_manifests_v2"]
+              },
+              "object_ids_sorted": {
+                "type": "boolean"
+              }
+            },
+            "required": ["num_objects", "sid_ndim", "layout"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_object_attribute"
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "dtype": {
+                "$ref": "#/$defs/dtype"
+              },
+              "shape": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "channel_names": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "fill_sentinel_meaning": {
+                "const": "absent"
+              }
+            },
+            "required": ["name", "dtype"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_groups"
+          },
+          "then": {
+            "properties": {
+              "num_groups": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "group_ranges": {
+                "type": "object",
+                "patternProperties": {
+                  "^[0-9]+$": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["num_groups"],
+            "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_group_attribute"
+          },
+          "then": {
+            "properties": {
+              "name": {
+                "$ref": "#/$defs/name"
+              },
+              "dtype": {
+                "$ref": "#/$defs/dtype"
+              },
+              "shape": {
+                "type": "array",
+                "items": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "channel_names": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            },
+            "required": ["name", "dtype"],
+            "type": "object"
+          }
+        }
+      ],
       "additionalProperties": true
+    },
+    "kindEq_root": {
+      "properties": {
+        "kind": {
+          "const": "root"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_level": {
+      "properties": {
+        "kind": {
+          "const": "level"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_vertices": {
+      "properties": {
+        "kind": {
+          "const": "vertices"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_fragmentIndex": {
+      "properties": {
+        "kind": {
+          "enum": ["vertex_fragments", "link_fragments"]
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_links_family": {
+      "properties": {
+        "kind": {
+          "const": "links_family"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_links": {
+      "properties": {
+        "kind": {
+          "const": "links"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_rowAttribute": {
+      "properties": {
+        "kind": {
+          "enum": ["vertex_attribute", "fragment_attribute", "link_attribute"]
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_link_attribute_family": {
+      "properties": {
+        "kind": {
+          "const": "link_attribute_family"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_link_attribute": {
+      "properties": {
+        "kind": {
+          "const": "link_attribute"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_object_index": {
+      "properties": {
+        "kind": {
+          "const": "object_index"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_object_attribute": {
+      "properties": {
+        "kind": {
+          "const": "object_attribute"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_groups": {
+      "properties": {
+        "kind": {
+          "const": "groups"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_group_attribute": {
+      "properties": {
+        "kind": {
+          "const": "group_attribute"
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
+    },
+    "kindEq_perChunk": {
+      "properties": {
+        "kind": {
+          "enum": [
+            "vertices",
+            "vertex_fragments",
+            "link_fragments",
+            "links",
+            "vertex_attribute",
+            "fragment_attribute",
+            "link_attribute"
+          ]
+        }
+      },
+      "required": ["kind"],
+      "type": "object"
     },
     "rootMetadata": {
       "type": "object",
-      "description": "Root metadata (zarr_vectors). Unknown keys are allowed and SHOULD be ignored by readers.",
       "properties": {
         "zv_version": {
-          "type": "string",
           "const": "0.9.2",
-          "description": "REQUIRED. Zarr Vectors format version. This schema (tag v0.9.2) validates format 0.9.2 only; each format version has its own tagged schema."
+          "description": "Format version of the cell payloads. Convention v0.1.0 covers format 0.9.2 only."
+        },
+        "axes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": ["name", "type"],
+            "additionalProperties": true
+          },
+          "contains": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "space"
+              }
+            },
+            "required": ["type"]
+          }
         },
         "chunk_shape": {
-          "$ref": "#/$defs/positiveFloatVector",
-          "description": "REQUIRED. Level-0 chunk shape, one entry per space axis"
+          "$ref": "#/$defs/positiveVector"
         },
         "bounds": {
           "type": "array",
-          "description": "REQUIRED. Global [min_corner, max_corner]",
-          "items": { "$ref": "#/$defs/numberVector" },
+          "prefixItems": [
+            {
+              "$ref": "#/$defs/numberVector"
+            },
+            {
+              "$ref": "#/$defs/numberVector"
+            }
+          ],
           "minItems": 2,
           "maxItems": 2
         },
         "geometry_types": {
           "type": "array",
-          "description": "REQUIRED. Geometry types present. Values outside the canonical set are custom types.",
           "items": {
             "type": "string",
-            "anyOf": [
-              {
-                "enum": [
-                  "point_cloud",
-                  "line",
-                  "polyline",
-                  "streamline",
-                  "skeleton",
-                  "graph",
-                  "mesh"
-                ]
-              },
-              { "minLength": 1 }
-            ]
+            "minLength": 1
           },
           "minItems": 1,
           "uniqueItems": true
         },
-        "crs": {
-          "type": ["object", "null"],
-          "description": "OME-Zarr RFC 4 / 5 coordinate reference system, or null"
-        },
         "links_convention": {
-          "type": "string",
           "enum": [
             "explicit",
             "implicit_sequential",
@@ -247,12 +863,10 @@
           "default": "implicit_sequential"
         },
         "object_index_convention": {
-          "type": "string",
           "enum": ["standard", "identity"],
           "default": "standard"
         },
         "cross_chunk_strategy": {
-          "type": "string",
           "enum": ["explicit_links", "boundary_deduplication", "both"],
           "default": "explicit_links"
         },
@@ -262,10 +876,7 @@
           "default": 8
         },
         "base_bin_shape": {
-          "oneOf": [
-            { "$ref": "#/$defs/positiveFloatVector" },
-            { "type": "null" }
-          ]
+          "$ref": "#/$defs/positiveVector"
         },
         "cross_level_depth": {
           "type": "integer",
@@ -273,127 +884,71 @@
           "default": 1
         },
         "cross_level_storage": {
-          "type": "string",
           "enum": ["none", "implicit", "explicit"],
           "default": "explicit"
         },
         "format_capabilities": {
           "type": "array",
-          "description": "REQUIRED. Capability tokens. Open set: readers MUST NOT assume an unrecognised token's feature is present. fragment_index is mandatory in 0.9.",
-          "items": { "type": "string", "minLength": 1 },
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
           "uniqueItems": true,
-          "contains": { "const": "fragment_index" }
+          "default": []
+        },
+        "attribute_specs": {
+          "type": "object",
+          "propertyNames": {
+            "enum": ["vertex", "fragment", "link", "object", "group"]
+          },
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "dtype": {
+                  "$ref": "#/$defs/dtype"
+                },
+                "unit": {
+                  "type": "string"
+                }
+              }
+            }
+          }
         }
       },
       "required": [
         "zv_version",
+        "axes",
         "chunk_shape",
         "bounds",
-        "geometry_types",
-        "format_capabilities"
+        "geometry_types"
       ],
-      "additionalProperties": true
-    },
-    "ngffMultiscales": {
-      "type": "array",
-      "description": "OME-NGFF 0.4 multiscales block (bare-root form). Defined by OME-NGFF; only the parts Zarr Vectors relies on are checked here, and only on the first entry.",
-      "minItems": 1,
-      "prefixItems": [
-        {
-          "type": "object",
-          "properties": {
-            "version": { "const": "0.4" },
-            "axes": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "object",
-                "properties": {
-                  "name": { "type": "string" },
-                  "type": { "type": "string" },
-                  "unit": { "type": "string" }
-                },
-                "required": ["name"]
-              }
-            },
-            "datasets": {
-              "type": "array",
-              "minItems": 1,
-              "items": {
-                "type": "object",
-                "properties": {
-                  "path": { "type": "string", "pattern": "^[0-9]+$" },
-                  "coordinateTransformations": {
-                    "type": "array",
-                    "description": "Exactly [scale, translation]: scale = bin_shape / base_bin_shape, translation = bin_shape / 2",
-                    "prefixItems": [
-                      {
-                        "type": "object",
-                        "properties": {
-                          "type": { "const": "scale" },
-                          "scale": { "$ref": "#/$defs/positiveFloatVector" }
-                        },
-                        "required": ["type", "scale"]
-                      },
-                      {
-                        "type": "object",
-                        "properties": {
-                          "type": { "const": "translation" },
-                          "translation": {
-                            "$ref": "#/$defs/positiveFloatVector"
-                          }
-                        },
-                        "required": ["type", "translation"]
-                      }
-                    ],
-                    "minItems": 2,
-                    "maxItems": 2
-                  }
-                },
-                "required": ["path", "coordinateTransformations"]
-              }
-            },
-            "metadata": {
-              "type": "object",
-              "properties": {
-                "format": { "const": "zarr_vectors" }
-              },
-              "required": ["format"]
-            }
-          },
-          "required": ["version", "axes", "datasets", "metadata"]
-        }
-      ]
-    },
-
-    "levelAttributes": {
-      "type": "object",
-      "description": "Attributes of a resolution-level group (0/, 1/, ...)",
-      "properties": {
-        "zarr_conventions": true,
-        "zarr_vectors_level": {
-          "$ref": "#/$defs/levelMetadata"
-        }
-      },
-      "required": ["zarr_vectors_level"],
       "not": {
+        "description": "CRS moved to the proj convention; parent links moved to multiscales derived_from.",
         "anyOf": [
-          { "required": ["zarr_vectors"] },
-          { "required": ["zv_array"] }
+          {
+            "required": ["crs"],
+            "type": "object"
+          },
+          {
+            "required": ["parent_level"],
+            "type": "object"
+          }
         ]
-      },
-      "additionalProperties": true
+      }
     },
     "levelMetadata": {
       "type": "object",
-      "description": "Per-level metadata (zarr_vectors_level). Unknown keys are allowed and SHOULD be ignored by readers.",
       "properties": {
         "level": {
           "type": "integer",
-          "minimum": 0,
-          "description": "REQUIRED. Level index, 0 = full resolution"
+          "minimum": 0
         },
-        "vertex_count": { "type": "integer", "minimum": 0 },
+        "vertex_count": {
+          "type": "integer",
+          "minimum": 0
+        },
         "arrays_present": {
           "type": "array",
           "items": {
@@ -413,13 +968,12 @@
           },
           "uniqueItems": true
         },
-        "fragments_tile": { "type": "boolean", "default": false },
+        "fragments_tile": {
+          "type": "boolean",
+          "default": false
+        },
         "chunk_shape": {
-          "oneOf": [
-            { "$ref": "#/$defs/positiveFloatVector" },
-            { "type": "null" }
-          ],
-          "description": "Per-level override; each axis a positive integer multiple of root chunk_shape"
+          "$ref": "#/$defs/positiveVector"
         },
         "object_sparsity": {
           "type": "number",
@@ -427,100 +981,186 @@
           "maximum": 1
         },
         "coarsening_method": {
-          "type": "string",
           "enum": ["per_object", "manual", "none"]
         },
-        "parent_level": {
-          "type": ["integer", "null"],
-          "minimum": 0
-        },
         "chunk_dims": {
-          "type": ["array", "null"],
-          "items": { "type": "string" }
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
-        "chunk_attribute_name": { "type": ["string", "null"] },
-        "chunk_attribute_values": { "type": ["array", "null"] },
-        "preserves_object_ids": { "type": "boolean", "default": false },
+        "chunk_attribute_name": {
+          "type": "string"
+        },
+        "chunk_attribute_values": {
+          "type": "array"
+        },
+        "preserves_object_ids": {
+          "type": "boolean",
+          "default": false
+        },
         "inherited_num_objects": {
-          "type": ["integer", "null"],
+          "type": "integer",
           "minimum": 0
         },
-        "shared_fragments": { "type": "boolean", "default": false }
+        "shared_fragments": {
+          "type": "boolean",
+          "default": false
+        }
       },
       "required": ["level"],
       "not": {
+        "description": "Bin geometry and the parent link live in the root multiscales layout; bounds are root-only.",
         "anyOf": [
-          { "required": ["bin_shape"] },
-          { "required": ["bin_ratio"] },
-          { "required": ["bounds"] }
+          {
+            "required": ["bin_shape"],
+            "type": "object"
+          },
+          {
+            "required": ["bin_ratio"],
+            "type": "object"
+          },
+          {
+            "required": ["bounds"],
+            "type": "object"
+          },
+          {
+            "required": ["parent_level"],
+            "type": "object"
+          }
         ]
       },
       "allOf": [
         {
           "if": {
-            "properties": { "preserves_object_ids": { "const": true } },
-            "required": ["preserves_object_ids"]
+            "properties": {
+              "preserves_object_ids": {
+                "const": true
+              }
+            },
+            "required": ["preserves_object_ids"],
+            "type": "object"
           },
           "then": {
-            "properties": { "inherited_num_objects": { "type": "integer" } },
-            "required": ["inherited_num_objects"]
+            "required": ["inherited_num_objects"],
+            "type": "object"
           }
         },
         {
           "if": {
-            "properties": { "level": { "const": 0 } },
-            "required": ["level"]
+            "properties": {
+              "level": {
+                "const": 0
+              }
+            },
+            "required": ["level"],
+            "type": "object"
           },
           "then": {
             "properties": {
-              "parent_level": { "type": "null" },
-              "preserves_object_ids": { "const": false }
-            }
+              "preserves_object_ids": {
+                "const": false
+              }
+            },
+            "type": "object"
           }
         }
-      ],
-      "additionalProperties": true
+      ]
     },
-
-    "arrayAttributes": {
+    "multiscales": {
       "type": "object",
-      "description": "Attributes of a Zarr Vectors array or family group, keyed by the zv_array discriminator",
+      "description": "multiscales convention v0.1 block. Zarr Vectors adds: level 0 is asset \"0\" with no derived_from; every other level names its parent level in derived_from; transform.scale is the bin-grid ratio to that parent; translation is absent or zero.",
       "properties": {
-        "zarr_conventions": true,
-        "zv_array": {
-          "type": "string",
-          "enum": [
-            "vertices",
-            "vertex_fragments",
-            "link_fragments",
-            "links_family",
-            "links",
-            "attribute",
-            "fragment_attribute",
-            "link_attribute_family",
-            "link_attribute",
-            "object_index",
-            "object_attribute",
-            "groups",
-            "groupings_attribute"
-          ]
-        },
-        "name": { "type": "string", "minLength": 1 },
-        "dtype": { "type": "string", "minLength": 1 },
-        "shape": { "type": "array", "items": { "type": "integer" } },
-        "row_shape": {
+        "layout": {
           "type": "array",
-          "items": { "type": "integer", "minimum": 1 },
-          "maxItems": 1
-        },
-        "channel_names": { "type": "array", "items": { "type": "string" } },
-        "channel_dtype": { "type": "string" },
-        "compression_codec": { "type": "string" },
-        "chunk_grid_origin": {
-          "type": "array",
-          "items": { "type": "integer" },
-          "minItems": 1
-        },
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "properties": {
+              "asset": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              "derived_from": {
+                "type": "string",
+                "pattern": "^[0-9]+$"
+              },
+              "transform": {
+                "type": "object",
+                "properties": {
+                  "scale": {
+                    "$ref": "#/$defs/positiveVector"
+                  },
+                  "translation": {
+                    "type": "array",
+                    "items": {
+                      "const": 0
+                    }
+                  }
+                }
+              }
+            },
+            "required": ["asset"],
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "asset": {
+                      "const": "0"
+                    }
+                  },
+                  "required": ["asset"],
+                  "type": "object"
+                },
+                "then": {
+                  "not": {
+                    "required": ["derived_from"],
+                    "type": "object"
+                  },
+                  "properties": {
+                    "transform": {
+                      "properties": {
+                        "scale": {
+                          "items": {
+                            "const": 1
+                          },
+                          "type": "array"
+                        }
+                      },
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                },
+                "else": {
+                  "required": ["derived_from", "transform"],
+                  "properties": {
+                    "transform": {
+                      "required": ["scale"],
+                      "type": "object"
+                    }
+                  },
+                  "type": "object"
+                }
+              }
+            ]
+          },
+          "contains": {
+            "type": "object",
+            "properties": {
+              "asset": {
+                "const": "0"
+              }
+            },
+            "required": ["asset"]
+          }
+        }
+      },
+      "required": ["layout"]
+    },
+    "perChunkFields": {
+      "type": "object",
+      "properties": {
         "nonempty_chunks": {
           "type": "array",
           "items": {
@@ -529,200 +1169,55 @@
           },
           "uniqueItems": true
         },
-        "level_delta": { "type": "integer" },
-        "link_width": { "type": "integer", "minimum": 1 },
-        "offsets": {
+        "chunk_grid_origin": {
           "type": "array",
-          "items": { "type": "array", "items": { "type": "integer" } }
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 1
         }
-      },
-      "required": ["zv_array"],
-      "not": {
-        "anyOf": [
-          { "required": ["zarr_vectors"] },
-          { "required": ["zarr_vectors_level"] }
-        ]
-      },
-      "allOf": [
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": {
-              "zv_array": {
-                "enum": [
-                  "links_family",
-                  "link_attribute_family",
-                  "object_index",
-                  "object_attribute",
-                  "groups",
-                  "groupings_attribute"
-                ]
-              }
-            }
-          },
-          "then": {
-            "description": "nonempty_chunks and chunk_grid_origin belong only to per-chunk arrays",
-            "not": {
-              "anyOf": [
-                { "required": ["nonempty_chunks"] },
-                { "required": ["chunk_grid_origin"] }
-              ]
-            }
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "vertices" } }
-          },
-          "then": {
-            "properties": { "encoding": { "enum": ["raw", "draco"] } },
-            "required": ["dtype", "encoding"]
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": {
-              "zv_array": { "enum": ["vertex_fragments", "link_fragments"] }
-            }
-          },
-          "then": {
-            "properties": { "encoding": { "const": "fragment_index_v1" } },
-            "required": ["encoding"]
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "links_family" } }
-          },
-          "then": {
-            "properties": {
-              "sid_ndim": { "type": "integer", "minimum": 1 },
-              "directed": { "type": "boolean" },
-              "store": { "enum": ["canonical", "duplicate"] },
-              "num_links": { "type": "integer", "minimum": 0 },
-              "num_physical_records": { "type": "integer", "minimum": 0 }
-            },
-            "required": [
-              "level_delta",
-              "link_width",
-              "sid_ndim",
-              "directed",
-              "store"
-            ]
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "links" } }
-          },
-          "then": {
-            "properties": { "has_perm": { "type": "boolean" } },
-            "required": [
-              "dtype",
-              "offsets",
-              "has_perm",
-              "link_width",
-              "level_delta"
-            ]
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": {
-              "zv_array": { "enum": ["attribute", "fragment_attribute"] }
-            }
-          },
-          "then": { "required": ["name", "dtype", "row_shape"] }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "link_attribute_family" } }
-          },
-          "then": { "required": ["name", "level_delta"] }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "link_attribute" } }
-          },
-          "then": {
-            "required": ["name", "dtype", "row_shape", "offsets", "level_delta"]
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "object_index" } }
-          },
-          "then": {
-            "properties": {
-              "num_objects": { "type": "integer", "minimum": 0 },
-              "num_present": { "type": "integer", "minimum": 0 },
-              "sid_ndim": { "type": "integer", "minimum": 1 },
-              "layout": { "const": "vlen_manifests_v1" }
-            },
-            "required": ["num_objects", "num_present", "sid_ndim", "layout"]
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "object_attribute" } }
-          },
-          "then": {
-            "properties": { "fill_sentinel_meaning": { "const": "absent" } },
-            "required": ["name", "dtype"]
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "groups" } }
-          },
-          "then": {
-            "properties": {
-              "num_groups": { "type": "integer", "minimum": 0 },
-              "group_ranges": {
-                "type": "object",
-                "patternProperties": {
-                  "^[0-9]+$": {
-                    "type": "array",
-                    "items": { "type": "integer", "minimum": 0 },
-                    "minItems": 2,
-                    "maxItems": 2
-                  }
-                },
-                "additionalProperties": false
-              }
-            },
-            "required": ["num_groups"]
-          }
-        },
-        {
-          "if": {
-            "required": ["zv_array"],
-            "properties": { "zv_array": { "const": "groupings_attribute" } }
-          },
-          "then": { "required": ["name", "dtype"] }
-        }
-      ],
-      "additionalProperties": true
+      }
     },
-
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dtype": {
+      "type": "string",
+      "minLength": 1,
+      "description": "NumPy dtype name of the rows inside a cell"
+    },
+    "rowShape": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "maxItems": 1
+    },
+    "offsets": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "integer"
+        },
+        "minItems": 1
+      }
+    },
     "numberVector": {
       "type": "array",
-      "items": { "type": "number" },
+      "items": {
+        "type": "number"
+      },
       "minItems": 1
     },
-    "positiveFloatVector": {
+    "positiveVector": {
       "type": "array",
-      "items": { "type": "number", "exclusiveMinimum": 0 },
+      "items": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
       "minItems": 1
     }
   }
