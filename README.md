@@ -4,7 +4,7 @@
 - **Name**: zarr_vectors
 - **Schema URL**: "https://raw.githubusercontent.com/AllenInstitute/zarr-vectors-convention/refs/tags/v0.1.0/schema.json"
 - **Spec URL**: "https://github.com/AllenInstitute/zarr-vectors-convention/blob/v0.1.0/README.md"
-- **Convention version**: 0.1.0, covering Zarr Vectors format **0.9.2**
+- **Convention version**: 0.1.0, covering Zarr Vectors format **0.10.0**
 - **Format specification**: [Zarr Vectors format spec at commit `f587ec5`](https://github.com/AllenInstitute/zarr_vectors/tree/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs) ([rendered, unversioned](https://alleninstitute.github.io/zarr_vectors/))
 - **Scope**: Array, Group
 - **Extension Maturity Classification**: Proposal
@@ -68,9 +68,11 @@ Each convention version lists the format versions it covers:
 
 | Convention version | Format versions (`zv_version`) |
 | ------------------ | ------------------------------ |
-| 0.1.0              | `0.9.2`                        |
+| 0.1.0              | `0.10.0`                       |
 
 A reader MUST check `zv_version` and MUST NOT interpret cells of a format version it does not support.
+
+Format 0.10.0 is the first format version described by this convention. Its cell payloads are byte-for-byte those of format 0.9.2; it differs only in where the metadata lives (see [Migrating](#migrating-from-format-092-metadata)). Because a 0.9.2 reader looks up keys by their old locations, the move is a breaking change and takes a new format version: stamping `"0.9.2"` on the new layout would tell existing readers to parse it the old way.
 
 ## Applicable To
 
@@ -117,7 +119,7 @@ A reader MUST reject a node whose `kind` it does not recognise. Within the `zarr
     ],
     "zarr_vectors": {
       "kind": "root",
-      "zv_version": "0.9.2",
+      "zv_version": "0.10.0",
       "axes": [
         { "name": "z", "type": "space", "unit": "micrometer" },
         { "name": "y", "type": "space", "unit": "micrometer" },
@@ -152,7 +154,7 @@ A reader MUST reject a node whose `kind` it does not recognise. Within the `zarr
 | Field                   | Type                    | Description                                                                                                                                                                                                                                                                                                                                                    |
 | ----------------------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | kind                    | `"root"`                | **REQUIRED**.                                                                                                                                                                                                                                                                                                                                                  |
-| zv_version              | string                  | **REQUIRED**. Format version. Convention 0.1.0 accepts `"0.9.2"` only.                                                                                                                                                                                                                                                                                         |
+| zv_version              | string                  | **REQUIRED**. Format version. Convention 0.1.0 accepts `"0.10.0"` only.                                                                                                                                                                                                                                                                                        |
 | axes                    | \[object]               | **REQUIRED**. One `{name, type, unit?}` per coordinate axis, in the order `time → channel → custom → space`. `type` is `space`, `time`, `channel` or `custom`, and at least one axis MUST be `space`. `sid_ndim`, the number of spatial-index dimensions, is the number of `space` axes. `unit` is a UDUNITS-2 name; writers MUST NOT stamp placeholder units. |
 | chunk_shape             | \[number]               | **REQUIRED**. Level-0 chunk edge lengths, one positive entry per space axis.                                                                                                                                                                                                                                                                                   |
 | bounds                  | \[\[number], \[number]] | **REQUIRED**. Global `[min_corner, max_corner]` containing all data. Root-only.                                                                                                                                                                                                                                                                                |
@@ -198,6 +200,8 @@ bin_shape(L)    = bin_shape(derived_from(L)) × transform(L).scale   (per axis)
 ```
 
 The `derived_from` chain MUST reach `"0"` without cycles. `scale` is a float and MUST NOT be rounded.
+
+`transform.scale` is relative to the **parent** level, as the multiscales convention defines it. In format 0.9.2 the NGFF `scale` was relative to level 0. A reader that keeps the 0.9.2 meaning gets the bin size of every level below the first wrong, silently.
 
 ### Level Metadata
 
@@ -281,12 +285,13 @@ The JSON schema validates one node at a time. These rules span nodes or fields, 
 
 - **multiscales**: the root's `multiscales` block is the registered multiscales convention, so generic multiscales tools can list the levels and their relative scales. Their `asset` entries point at groups, which that convention allows.
 - **proj**: coordinate reference systems use the proj convention on the root group; see [the geospatial example](examples/geospatial_root_group.json).
+- **OME-Zarr collections (RFC 8)**: the root MAY carry an `ome` object that is an OME-Zarr RFC 8 `collection` node, with one `zv:level` leaf per resolution level and a `scene` declaring a `world` coordinate system. It lets an OME collection elsewhere name this store by path. It only restates fields held in `zarr_vectors`, which stay authoritative. Readers of this convention MUST NOT depend on it.
 - **OME-NGFF**: a Zarr Vectors store is **not** an OME-Zarr image and does not carry NGFF metadata. NGFF's `multiscales.datasets` must point at image arrays, and its axes are limited to 2–3 space dimensions. Neither fits vector data, so earlier drafts that reused the NGFF block made generic NGFF viewers misread the store.
 - **Extending Zarr Vectors**: the `zarr_vectors` object allows additional properties. Other conventions MAY add prefixed keys to it.
 
 ## Migrating from format 0.9.2 metadata
 
-zarr-vectors-py 0.9.2 writes an earlier, unregistered layout. A writer migrates node by node:
+zarr-vectors-py 0.9.2 writes an earlier, unregistered layout. Only metadata moves; no cell is rewritten, so a store migrates in place by rewriting its `zarr.json` documents and setting `zv_version` to `"0.10.0"`:
 
 | 0.9.2 location                                                 | Convention 0.1.0 location                                                                                                                                 |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -305,7 +310,7 @@ zarr-vectors-py 0.9.2 writes an earlier, unregistered layout. A writer migrates 
 ## Open Questions
 
 1. **Spec and implementation disagree.** zarr-vectors-py 0.9.2 writes `object_index.layout = "vlen_manifests_v2"` and `fragment_attributes/<name>` arrays, but the format specification at the pinned commit defines only `vlen_manifests_v1` and has no fragment-attribute section. This convention accepts what the reference writer produces. The format specification needs updating before this convention can leave Proposal.
-2. **Format spec versioning.** The format spec repository has no tags, so links are pinned to commit `f587ec5`. They should move to a `v0.9.2` tag once one exists.
+2. **Format spec versioning.** The format spec repository has no tags, so links are pinned to commit `f587ec5`. Format 0.10.0 reuses the 0.9.2 cell layouts, so this commit stays correct for the payloads; the links should move to a tag once the format spec repository has one.
 3. **Format spec licence.** The format specification is published under the Allen Institute Software License, which prohibits commercial use. A community convention that normatively references it will need it under a permissive licence (for example CC-BY-4.0).
 4. **`bounds` inclusivity.** Neither this convention nor the format spec says whether `max_corner` is inclusive. With `bounds` 0–1000 and `chunk_shape` 200, the answer decides whether chunk index 5 exists.
 5. **`bytes` vs `variable_length_bytes`.** Writers SHOULD use the registered name, but zarr-python 3.x writes the other. Readers must accept both until zarr-python changes.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://raw.githubusercontent.com/AllenInstitute/zarr-vectors-convention/refs/tags/v0.1.0/schema.json",
   "title": "Zarr Vectors Convention v0.1.0",
-  "description": "Validates one node's zarr.json under the Zarr Vectors convention v0.1.0 (metadata for Zarr Vectors format 0.9.2). Every property lives under the single attribute key `zarr_vectors`, discriminated by `kind`. Rules that span several nodes (axis counts, bin divisibility, the derived_from chain, link offsets) are listed in the README and are not checked here.",
+  "description": "Validates one node's zarr.json under the Zarr Vectors convention v0.1.0 (metadata for Zarr Vectors format 0.10.0). Every property lives under the single attribute key `zarr_vectors`, discriminated by `kind`. Rules that span several nodes (axis counts, bin divisibility, the derived_from chain, link offsets) are listed in the README and are not checked here.",
   "type": "object",
   "properties": {
     "zarr_format": {
@@ -794,8 +794,8 @@
       "type": "object",
       "properties": {
         "zv_version": {
-          "const": "0.9.2",
-          "description": "Format version of the cell payloads. Convention v0.1.0 covers format 0.9.2 only."
+          "const": "0.10.0",
+          "description": "Format version of the cell payloads. Convention v0.1.0 covers format 0.10.0 only. Format 0.10.0 has the same cell payloads as 0.9.2; it moves the metadata into this convention's layout."
         },
         "axes": {
           "type": "array",
