@@ -90,22 +90,55 @@
         "$ref": "#/$defs/kindIs_vlenKinds"
       },
       "then": {
-        "description": "Per-chunk arrays and `groups` use the zarr-extensions `bytes` data type (zarr-python spells it `variable_length_bytes`) with the `vlen-bytes` codec.",
+        "description": "Per-chunk arrays and `groups` use the zarr-extensions `bytes` data type (zarr-python spells it `variable_length_bytes`) with the `vlen-bytes` codec, directly or as the cell codec of a sharding codec.",
         "properties": {
           "data_type": {
             "enum": ["bytes", "variable_length_bytes"]
           },
           "codecs": {
             "type": "array",
-            "contains": {
-              "type": "object",
-              "properties": {
-                "name": {
-                  "const": "vlen-bytes"
+            "anyOf": [
+              {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "vlen-bytes"
+                    }
+                  },
+                  "required": ["name"]
                 }
               },
-              "required": ["name"]
-            }
+              {
+                "type": "array",
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "configuration": {
+                      "type": "object",
+                      "properties": {
+                        "codecs": {
+                          "type": "array",
+                          "contains": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "const": "vlen-bytes"
+                              }
+                            },
+                            "required": ["name"]
+                          }
+                        }
+                      },
+                      "required": ["codecs"]
+                    }
+                  },
+                  "required": ["configuration"]
+                }
+              }
+            ],
+            "description": "vlen-bytes directly, or inside a sharding codec (sharding_indexed, octree) as its cell codec"
           }
         },
         "required": ["data_type", "codecs"],
@@ -550,7 +583,11 @@
                 "minimum": 1
               },
               "layout": {
-                "enum": ["vlen_manifests_v1", "vlen_manifests_v2"]
+                "enum": [
+                  "vlen_manifests_v1",
+                  "vlen_manifests_v2",
+                  "dense_manifests_v1"
+                ]
               },
               "object_ids_sorted": {
                 "type": "boolean"
@@ -915,6 +952,45 @@
               }
             }
           }
+        },
+        "shard_shape": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "minItems": 1
+            }
+          ],
+          "description": "Writer default: cells per shard per axis. Each array's own zarr.json is the truth about that array."
+        },
+        "octree_sharding": {
+          "type": "object",
+          "description": "Writer default: configuration of the octree sharding codec. Needs shard_shape."
+        },
+        "manifest_layout": {
+          "enum": ["vlen", "dense"],
+          "default": "vlen",
+          "description": "Writer default for new object indexes."
+        },
+        "manifest_block_dtype": {
+          "enum": ["int64", "int32"],
+          "default": "int64"
+        },
+        "required_capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true,
+          "description": "Capability tokens a reader MUST support to read the store at all."
         }
       },
       "required": [
@@ -936,7 +1012,19 @@
             "type": "object"
           }
         ]
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "required": ["octree_sharding"]
+          },
+          "then": {
+            "type": "object",
+            "required": ["shard_shape"]
+          }
+        }
+      ]
     },
     "levelMetadata": {
       "type": "object",
