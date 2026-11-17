@@ -233,7 +233,8 @@
                     "level",
                     "links_family",
                     "link_attribute_family",
-                    "object_index"
+                    "object_index",
+                    "parametric"
                   ]
                 }
               },
@@ -265,7 +266,9 @@
                     "link_attribute",
                     "object_attribute",
                     "groups",
-                    "group_attribute"
+                    "group_attribute",
+                    "parametric_objects",
+                    "parametric_names"
                   ]
                 }
               },
@@ -295,7 +298,8 @@
                     "vertex_attribute",
                     "fragment_attribute",
                     "link_attribute",
-                    "groups"
+                    "groups",
+                    "parametric_names"
                   ]
                 }
               },
@@ -343,12 +347,15 @@
             "links",
             "vertex_attribute",
             "fragment_attribute",
-            "link_attribute_family",
             "link_attribute",
+            "link_attribute_family",
             "object_index",
             "object_attribute",
             "groups",
-            "group_attribute"
+            "group_attribute",
+            "parametric_objects",
+            "parametric_names",
+            "parametric"
           ]
         }
       },
@@ -526,7 +533,7 @@
                 "type": "string"
               }
             },
-            "required": ["name", "dtype", "row_shape"],
+            "required": ["name", "dtype"],
             "type": "object"
           }
         },
@@ -593,7 +600,7 @@
                 "type": "boolean"
               }
             },
-            "required": ["num_objects", "sid_ndim", "layout"],
+            "required": [],
             "type": "object"
           }
         },
@@ -688,6 +695,75 @@
             },
             "required": ["name", "dtype"],
             "type": "object"
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_parametric"
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "parametric_types": {
+                "type": "object",
+                "patternProperties": {
+                  "^[0-9]+$": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "coefficients": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": ["name", "coefficients"]
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "$ref": "#/$defs/kindEq_parametricArrays"
+          },
+          "then": {
+            "type": "object",
+            "properties": {
+              "num_objects": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "max_row_length": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "dtype": {
+                "$ref": "#/$defs/dtype"
+              }
+            },
+            "required": ["num_objects"]
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "kind": {
+                "enum": ["vertex_attribute", "fragment_attribute"]
+              }
+            },
+            "required": ["kind"]
+          },
+          "then": {
+            "type": "object",
+            "required": ["row_shape"]
           }
         }
       ],
@@ -888,7 +964,6 @@
             "type": "string",
             "minLength": 1
           },
-          "minItems": 1,
           "uniqueItems": true
         },
         "links_convention": {
@@ -991,6 +1066,9 @@
           },
           "uniqueItems": true,
           "description": "Capability tokens a reader MUST support to read the store at all."
+        },
+        "coordinate_offset": {
+          "$ref": "#/$defs/numberVector"
         }
       },
       "required": [
@@ -1061,7 +1139,14 @@
           "default": false
         },
         "chunk_shape": {
-          "$ref": "#/$defs/positiveVector"
+          "anyOf": [
+            {
+              "$ref": "#/$defs/positiveVector"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "object_sparsity": {
           "type": "number",
@@ -1072,49 +1157,71 @@
           "enum": ["per_object", "manual", "none"]
         },
         "chunk_dims": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": {
             "type": "string"
           }
         },
         "chunk_attribute_name": {
-          "type": "string"
+          "type": ["string", "null"]
         },
         "chunk_attribute_values": {
-          "type": "array"
+          "type": ["array", "null"]
         },
         "preserves_object_ids": {
           "type": "boolean",
           "default": false
         },
         "inherited_num_objects": {
-          "type": "integer",
+          "type": ["integer", "null"],
           "minimum": 0
         },
         "shared_fragments": {
           "type": "boolean",
           "default": false
+        },
+        "parent_level": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "bin_shape": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/positiveVector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bin_ratio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/positiveVector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presence": {
+          "const": "deferred"
+        },
+        "link_fragments_aligned": {
+          "type": "boolean"
+        },
+        "octree_chunks": {
+          "type": "object"
         }
       },
       "required": ["level"],
       "not": {
-        "description": "Bin geometry and the parent link live in the root multiscales layout; bounds are root-only.",
+        "type": "object",
+        "description": "bounds are root-only",
         "anyOf": [
           {
-            "required": ["bin_shape"],
-            "type": "object"
-          },
-          {
-            "required": ["bin_ratio"],
-            "type": "object"
-          },
-          {
-            "required": ["bounds"],
-            "type": "object"
-          },
-          {
-            "required": ["parent_level"],
-            "type": "object"
+            "type": "object",
+            "required": ["bounds"]
           }
         ]
       },
@@ -1152,12 +1259,38 @@
             },
             "type": "object"
           }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "level": {
+                "const": 0
+              }
+            },
+            "required": ["level"]
+          },
+          "then": {
+            "type": "object",
+            "description": "Level 0's bin is the root base_bin_shape and it has no parent",
+            "properties": {
+              "parent_level": {
+                "type": "null"
+              },
+              "bin_shape": {
+                "type": "null"
+              },
+              "bin_ratio": {
+                "type": "null"
+              }
+            }
+          }
         }
       ]
     },
     "multiscales": {
       "type": "object",
-      "description": "multiscales convention v0.1 block. Zarr Vectors adds: level 0 is asset \"0\" with no derived_from; every other level names its parent level in derived_from; transform.scale is the bin-grid ratio to that parent; translation is absent or zero.",
+      "description": "multiscales convention v0.1 block: one {\"asset\": \"<level>\"} entry per resolution level, \"0\" included. Vertex coordinates are the same at every level, so an entry carries no transform, or only the identity. Bin geometry is the root base_bin_shape (level 0) and each coarse level's own bin_shape/bin_ratio.",
       "properties": {
         "layout": {
           "type": "array",
@@ -1169,15 +1302,14 @@
                 "type": "string",
                 "pattern": "^[0-9]+$"
               },
-              "derived_from": {
-                "type": "string",
-                "pattern": "^[0-9]+$"
-              },
               "transform": {
                 "type": "object",
                 "properties": {
                   "scale": {
-                    "$ref": "#/$defs/positiveVector"
+                    "type": "array",
+                    "items": {
+                      "const": 1
+                    }
                   },
                   "translation": {
                     "type": "array",
@@ -1188,50 +1320,7 @@
                 }
               }
             },
-            "required": ["asset"],
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "asset": {
-                      "const": "0"
-                    }
-                  },
-                  "required": ["asset"],
-                  "type": "object"
-                },
-                "then": {
-                  "not": {
-                    "required": ["derived_from"],
-                    "type": "object"
-                  },
-                  "properties": {
-                    "transform": {
-                      "properties": {
-                        "scale": {
-                          "items": {
-                            "const": 1
-                          },
-                          "type": "array"
-                        }
-                      },
-                      "type": "object"
-                    }
-                  },
-                  "type": "object"
-                },
-                "else": {
-                  "required": ["derived_from", "transform"],
-                  "properties": {
-                    "transform": {
-                      "required": ["scale"],
-                      "type": "object"
-                    }
-                  },
-                  "type": "object"
-                }
-              }
-            ]
+            "required": ["asset"]
           },
           "contains": {
             "type": "object",
@@ -1307,6 +1396,24 @@
         "exclusiveMinimum": 0
       },
       "minItems": 1
+    },
+    "kindEq_parametric": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "const": "parametric"
+        }
+      },
+      "required": ["kind"]
+    },
+    "kindEq_parametricArrays": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": ["parametric_objects", "parametric_names"]
+        }
+      },
+      "required": ["kind"]
     }
   }
 }

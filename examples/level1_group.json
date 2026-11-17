@@ -23,6 +23,17 @@
         400.0,
         400.0
       ],
+      "parent_level": 0,
+      "bin_shape": [
+        100.0,
+        100.0,
+        100.0
+      ],
+      "bin_ratio": [
+        2.0,
+        2.0,
+        2.0
+      ],
       "coarsening_method": "per_object",
       "object_sparsity": 1.0,
       "preserves_object_ids": true,

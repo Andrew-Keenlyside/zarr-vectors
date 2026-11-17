@@ -25,6 +25,7 @@ This convention defines the metadata of a **Zarr Vectors** store: a Zarr v3 hier
   - Level groups: [level 0](examples/level0_group.json), [level 1](examples/level1_group.json)
   - Per-chunk arrays: [`vertices`](examples/vertices_array.json), [`vertex_fragments`](examples/vertex_fragments_array.json), [`vertex_attribute`](examples/vertex_attribute_array.json), [`links`](examples/links_array.json), [sharded `vertices`](examples/vertices_sharded_array.json)
   - Family groups and per-object arrays: [`links_family`](examples/links_family_group.json), [`object_index` (v2)](examples/object_index_group.json), [`object_index` (v1)](examples/object_index_v1_group.json), [`object_index` (dense)](examples/object_index_dense_group.json), [`object_attribute`](examples/object_attribute_array.json), [`groups`](examples/groups_array.json)
+  - Parametric objects: [`parametric/` group](examples/parametric_group.json), [`parametric/objects`](examples/parametric_objects_array.json)
   - [Invalid documents](examples/invalid/) that the schema must reject
 
 ## Motivation
@@ -83,23 +84,28 @@ Format 0.10.0 is the first format version described by this convention. Its cell
 
 This convention uses the **nested pattern**. All of its properties live in one object under the attribute key `zarr_vectors`. The required `kind` field says what the node is:
 
-| `kind`                  | Node                                               | `node_type` | Fields                               |
-| ----------------------- | -------------------------------------------------- | ----------- | ------------------------------------ |
-| `root`                  | store root                                         | group       | [Root](#root-metadata)               |
-| `level`                 | `<level>/`                                         | group       | [Level](#level-metadata)             |
-| `vertices`              | `<level>/vertices`                                 | array       | [Arrays](#array-and-family-metadata) |
-| `vertex_fragments`      | `<level>/vertex_fragments`                         | array       | 〃                                   |
-| `link_fragments`        | `<level>/link_fragments`                           | array       | 〃                                   |
-| `links_family`          | `<level>/links/<delta>`                            | group       | 〃                                   |
-| `links`                 | `<level>/links/<delta>/<offsets>`                  | array       | 〃                                   |
-| `vertex_attribute`      | `<level>/vertex_attributes/<name>`                 | array       | 〃                                   |
-| `fragment_attribute`    | `<level>/fragment_attributes/<name>`               | array       | 〃                                   |
-| `link_attribute_family` | `<level>/link_attributes/<name>/<delta>`           | group       | 〃                                   |
-| `link_attribute`        | `<level>/link_attributes/<name>/<delta>/<offsets>` | array       | 〃                                   |
-| `object_index`          | `<level>/object_index`                             | group       | 〃                                   |
-| `object_attribute`      | `<level>/object_attributes/<name>`                 | array       | 〃                                   |
-| `groups`                | `<level>/groups`                                   | array       | 〃                                   |
-| `group_attribute`       | `<level>/group_attributes/<name>`                  | array       | 〃                                   |
+| `kind`                  | Node                                               | `node_type`               | Fields                                                    |
+| ----------------------- | -------------------------------------------------- | ------------------------- | --------------------------------------------------------- |
+| `root`                  | store root                                         | group                     | [Root](#root-metadata)                                    |
+| `level`                 | `<level>/`                                         | group                     | [Level](#level-metadata)                                  |
+| `vertices`              | `<level>/vertices`                                 | array                     | [Arrays](#array-and-family-metadata)                      |
+| `vertex_fragments`      | `<level>/vertex_fragments`                         | array                     | 〃                                                        |
+| `link_fragments`        | `<level>/link_fragments`                           | array                     | 〃                                                        |
+| `links_family`          | `<level>/links/<delta>`                            | group                     | 〃                                                        |
+| `links`                 | `<level>/links/<delta>/<offsets>`                  | array                     | 〃                                                        |
+| `vertex_attribute`      | `<level>/vertex_attributes/<name>`                 | array                     | 〃                                                        |
+| `fragment_attribute`    | `<level>/fragment_attributes/<name>`               | array                     | 〃                                                        |
+| `link_attribute_family` | `<level>/link_attributes/<name>/<delta>`           | group                     | 〃                                                        |
+| `link_attribute`        | `<level>/link_attributes/<name>/<delta>/<offsets>` | array                     | 〃                                                        |
+| `object_index`          | `<level>/object_index`                             | group                     | 〃                                                        |
+| `object_attribute`      | `<level>/object_attributes/<name>`                 | array                     | 〃                                                        |
+| `groups`                | `<level>/groups`                                   | array                     | 〃                                                        |
+| `group_attribute`       | `<level>/group_attributes/<name>`                  | array                     | 〃                                                        |
+| `parametric`            | `parametric/`                                      | group                     | `parametric_types`: `{"<type id>": {name, coefficients}}` |
+| `parametric_objects`    | `parametric/objects`                               | array                     | 〃                                                        |
+| `parametric_names`      | `parametric/names`                                 | array                     | 〃                                                        |
+| `parametric_objects`    | `num_objects`                                      | `max_row_length`, `dtype` | not yet in the format spec                                |
+| `parametric_names`      | `num_objects`                                      | —                         | not yet in the format spec                                |
 
 A reader MUST reject a node whose `kind` it does not recognise. Within the `zarr_vectors` object, readers SHOULD ignore fields they do not recognise, and other conventions MAY add prefixed fields (for example `proj:` keys).
 
@@ -134,14 +140,7 @@ A reader MUST reject a node whose `kind` it does not recognise. Within the `zarr
       "base_bin_shape": [50.0, 50.0, 50.0]
     },
     "multiscales": {
-      "layout": [
-        { "asset": "0", "transform": { "scale": [1.0, 1.0, 1.0] } },
-        {
-          "asset": "1",
-          "derived_from": "0",
-          "transform": { "scale": [2.0, 2.0, 2.0] }
-        }
-      ]
+      "layout": [{ "asset": "0" }, { "asset": "1" }]
     }
   }
 }
@@ -158,8 +157,9 @@ A reader MUST reject a node whose `kind` it does not recognise. Within the `zarr
 | axes                    | \[object]                 | **REQUIRED**. One `{name, type, unit?}` per coordinate axis, in the order `time → channel → custom → space`. `type` is `space`, `time`, `channel` or `custom`, and at least one axis MUST be `space`. `sid_ndim`, the number of spatial-index dimensions, is the number of `space` axes. `unit` is a UDUNITS-2 name; writers MUST NOT stamp placeholder units. |
 | chunk_shape             | \[number]                 | **REQUIRED**. Level-0 chunk edge lengths, one positive entry per space axis.                                                                                                                                                                                                                                                                                   |
 | bounds                  | \[\[number], \[number]]   | **REQUIRED**. Global `[min_corner, max_corner]` containing all data. Root-only.                                                                                                                                                                                                                                                                                |
-| geometry_types          | \[string]                 | **REQUIRED**. Geometries present. Canonical values: `point_cloud`, `line`, `polyline`, `streamline`, `skeleton`, `graph`, `mesh`. Writers MAY add others; a reader SHOULD treat an unknown geometry as raw vertex and link arrays.                                                                                                                             |
+| geometry_types          | \[string]                 | **REQUIRED**. Geometries present; empty in a store that holds no data yet. Canonical values: `point_cloud`, `line`, `polyline`, `streamline`, `skeleton`, `graph`, `mesh`. Writers MAY add others; a reader SHOULD treat an unknown geometry as raw vertex and link arrays.                                                                                    |
 | base_bin_shape          | \[number]                 | Level-0 bin edge lengths. `chunk_shape / base_bin_shape` MUST be an integer on every axis. Default: `chunk_shape` (one bin per chunk).                                                                                                                                                                                                                         |
+| coordinate_offset       | \[number]                 | Stored-to-world offset per axis: world position = stored position + offset. Absent means zero.                                                                                                                                                                                                                                                                 |
 | links_convention        | string                    | `"explicit"`, `"implicit_sequential"` (default) or `"implicit_sequential_with_branches"`.                                                                                                                                                                                                                                                                      |
 | object_index_convention | string                    | `"standard"` (default) or `"identity"`. `"identity"` omits `object_index/` and is allowed only in a store with exactly one spatial chunk.                                                                                                                                                                                                                      |
 | cross_chunk_strategy    | string                    | `"explicit_links"` (default), `"boundary_deduplication"` or `"both"`.                                                                                                                                                                                                                                                                                          |
@@ -192,71 +192,70 @@ The set is open. A reader that meets an unknown token MUST either treat the feat
 
 ### Multiscales
 
-The root group carries a `multiscales` block defined by the [multiscales convention v0.1](https://github.com/zarr-conventions/multiscales/blob/v0.1/README.md), with one `layout` entry per resolution level. Zarr Vectors adds these rules:
+The root group carries a `multiscales` block defined by the [multiscales convention v0.1](https://github.com/zarr-conventions/multiscales/blob/v0.1/README.md), with one `layout` entry per resolution level:
+
+```json
+"multiscales": { "layout": [{ "asset": "0" }, { "asset": "1" }, { "asset": "2" }] }
+```
 
 - `asset` is the level group's name (`"0"`, `"1"`, …). Level `"0"` is full resolution and MUST be present.
-- Level `"0"` has no `derived_from`. If it has a `transform`, its `scale` is all `1`.
-- Every other level MUST name its parent level in `derived_from`. This is the level it was coarsened from, and whose object-ID space it inherits when `preserves_object_ids` is true.
-- `transform.scale` is REQUIRED on every level other than `"0"`. It is the ratio of this level's bin edge lengths to its parent's, per space axis. Vertex coordinates are physical at every level and are **not** rescaled; the scale describes the bin grid.
-- `transform.translation` MUST be absent or all zero, because the bin grids of all levels share their origin.
+- Writers SHOULD NOT write a `transform`. If one is present, it MUST be the identity: `scale` all `1`, and `translation` all `0`. The multiscales convention's transform describes how _coordinates_ change between levels, and in a Zarr Vectors store they do not. Every level's vertices are stored in level-0 coordinates.
+- `derived_from` MAY be present. If it is, it MUST equal the level's `parent_level`.
 
-The layout is the **only** place bin geometry is stored:
-
-```
-bin_shape("0")  = base_bin_shape
-bin_shape(L)    = bin_shape(derived_from(L)) × transform(L).scale   (per axis)
-```
-
-The `derived_from` chain MUST reach `"0"` without cycles. `scale` is a float and MUST NOT be rounded.
-
-`transform.scale` is relative to the **parent** level, as the multiscales convention defines it. In format 0.9.2 the NGFF `scale` was relative to level 0. A reader that keeps the 0.9.2 meaning gets the bin size of every level below the first wrong, silently.
+Bin geometry is Zarr Vectors' own and is stored once, outside this block: level 0's bin is the root `base_bin_shape`, and each coarse level's `bin_shape` and `bin_ratio` (relative to `base_bin_shape`) sit in its [level object](#level-metadata). Earlier drafts put the bin ratio in `transform.scale`, which told generic multiscales tools that the coordinates were rescaled.
 
 ### Level Metadata
 
 `kind: "level"`, on each resolution-level group.
 
-| Field                  | Type             | Description                                                                                                                                                                                         |
-| ---------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| kind                   | `"level"`        | **REQUIRED**.                                                                                                                                                                                       |
-| level                  | integer ≥ 0      | **REQUIRED**. Level index; MUST equal the group name.                                                                                                                                               |
-| vertex_count           | integer ≥ 0      | Total vertex rows across all `vertices` cells at this level.                                                                                                                                        |
-| arrays_present         | \[string]        | Family names present at this level, such as `"vertex_attributes"` (never `"vertex_attributes/<name>"`).                                                                                             |
-| fragments_tile         | boolean          | `true` when every chunk's fragment index tiles its vertex buffer exactly, so a bulk read may skip `vertex_fragments`. Any write to `vertices` or `vertex_fragments` MUST clear it. Default `false`. |
-| chunk_shape            | \[number]        | Per-level chunk-shape override. Each axis MUST be a positive integer multiple of the root `chunk_shape` and an integer multiple of this level's bin size.                                           |
-| object_sparsity        | number in (0, 1] | Fraction of the parent level's objects kept at this level.                                                                                                                                          |
-| coarsening_method      | string           | `"per_object"`, `"manual"` or `"none"`.                                                                                                                                                             |
-| chunk_dims             | \[string]        | Names of the chunk-key axes, leading axis first, when the store was rechunked along a non-spatial axis.                                                                                             |
-| chunk_attribute_name   | string           | Per-vertex attribute used as the leading chunk axis.                                                                                                                                                |
-| chunk_attribute_values | \[any]           | Ordered map from leading-axis chunk coordinate to attribute value.                                                                                                                                  |
-| preserves_object_ids   | boolean          | `true` when this level inherits its parent's object-ID space. MUST be `false` at level 0. Default `false`.                                                                                          |
-| inherited_num_objects  | integer ≥ 0      | Size of the inherited object-ID space. **REQUIRED** when `preserves_object_ids` is `true`.                                                                                                          |
-| shared_fragments       | boolean          | `true` when fragments at this level may be referenced by several manifests. Default `false`.                                                                                                        |
+| Field                  | Type              | Description                                                                                                                                                                                         |
+| ---------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| kind                   | `"level"`         | **REQUIRED**.                                                                                                                                                                                       |
+| level                  | integer ≥ 0       | **REQUIRED**. Level index; MUST equal the group name.                                                                                                                                               |
+| parent_level           | integer \| null   | The level this one was coarsened from, and whose object-ID space it inherits when `preserves_object_ids` is true. `null` (or absent) at level 0.                                                    |
+| bin_shape              | \[number] \| null | This level's bin edge lengths. Absent or `null` at level 0, whose bin is the root `base_bin_shape`.                                                                                                 |
+| bin_ratio              | \[number] \| null | `bin_shape / base_bin_shape` per axis, as a float that MUST NOT be rounded. Absent or `null` at level 0.                                                                                            |
+| presence               | `"deferred"`      | Set while the level's per-chunk arrays carry no `nonempty_chunks` (a distributed build in progress); readers then list the store.                                                                   |
+| link_fragments_aligned | boolean           | `true` when every chunk's link fragments align with its vertex fragments.                                                                                                                           |
+| octree_chunks          | object            | Present when the level stores one cell per octree leaf (see the `octree_chunks` capability).                                                                                                        |
+| vertex_count           | integer ≥ 0       | Total vertex rows across all `vertices` cells at this level.                                                                                                                                        |
+| arrays_present         | \[string]         | Family names present at this level, such as `"vertex_attributes"` (never `"vertex_attributes/<name>"`).                                                                                             |
+| fragments_tile         | boolean           | `true` when every chunk's fragment index tiles its vertex buffer exactly, so a bulk read may skip `vertex_fragments`. Any write to `vertices` or `vertex_fragments` MUST clear it. Default `false`. |
+| chunk_shape            | \[number]         | Per-level chunk-shape override. Each axis MUST be a positive integer multiple of the root `chunk_shape` and an integer multiple of this level's bin size.                                           |
+| object_sparsity        | number in (0, 1]  | Fraction of the parent level's objects kept at this level.                                                                                                                                          |
+| coarsening_method      | string            | `"per_object"`, `"manual"` or `"none"`.                                                                                                                                                             |
+| chunk_dims             | \[string]         | Names of the chunk-key axes, leading axis first, when the store was rechunked along a non-spatial axis.                                                                                             |
+| chunk_attribute_name   | string            | Per-vertex attribute used as the leading chunk axis.                                                                                                                                                |
+| chunk_attribute_values | \[any]            | Ordered map from leading-axis chunk coordinate to attribute value.                                                                                                                                  |
+| preserves_object_ids   | boolean           | `true` when this level inherits its parent's object-ID space. MUST be `false` at level 0. Default `false`.                                                                                          |
+| inherited_num_objects  | integer ≥ 0       | Size of the inherited object-ID space. **REQUIRED** when `preserves_object_ids` is `true`.                                                                                                          |
+| shared_fragments       | boolean           | `true` when fragments at this level may be referenced by several manifests. Default `false`.                                                                                                        |
 
-`bin_shape`, `bin_ratio`, `parent_level` and `bounds` MUST NOT appear here. Bin geometry and the parent link are stored once, in the root `multiscales` layout; bounds are root-only.
+`bounds` MUST NOT appear here; it is root-only. Fields whose value is `null` mean the same as absent.
 
 ### Array and Family Metadata
 
-| `kind`                  | Required fields                                                                                                | Optional fields                                                | Format spec                                                                                                                                                              |
-| ----------------------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `vertices`              | `dtype`, `encoding` (`"raw"` \| `"draco"`)                                                                     | `shape`, `compression_codec`                                   | [§7.1](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#71-vertex-positions)                          |
-| `vertex_fragments`      | `encoding` = `"fragment_index_v1"`                                                                             | —                                                              | [§7.3](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#73-vertex-fragments)                          |
-| `link_fragments`        | `encoding` = `"fragment_index_v1"`                                                                             | —                                                              | [§7.5](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#75-vertex-links)                              |
-| `links_family`          | `level_delta`, `link_width`, `directed`, `store` (`"canonical"` \| `"duplicate"`)                              | `sid_ndim`, `num_links`, `num_physical_records`                | [§10.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/10-cross-chunk-linking.md#106-on-disk-layout-the-links-family) |
-| `links`                 | `dtype`, `offsets`, `has_perm`, `link_width`, `level_delta`                                                    | —                                                              | [§10.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/10-cross-chunk-linking.md#106-on-disk-layout-the-links-family) |
-| `vertex_attribute`      | `name`, `dtype`, `row_shape`                                                                                   | `channel_names`, `channel_dtype`                               | [§7.2](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#72-vertex-attributes)                         |
-| `fragment_attribute`    | `name`, `dtype`, `row_shape`                                                                                   | `channel_names`, `channel_dtype`                               | not yet in the format spec ([open question](#open-questions))                                                                                                            |
-| `link_attribute_family` | `name`, `level_delta`                                                                                          | —                                                              | [§7.7](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#77-link-attributes)                           |
-| `link_attribute`        | `name`, `dtype`, `row_shape`, `offsets`, `level_delta`                                                         | `channel_names`                                                | [§7.7](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#77-link-attributes)                           |
-| `object_index`          | `num_objects`, `sid_ndim`, `layout` (`"vlen_manifests_v1"` \| `"vlen_manifests_v2"` \| `"dense_manifests_v1"`) | `num_present`, `object_ids_sorted`                             | [§7.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#76-object-index)                              |
-| `object_attribute`      | `name`, `dtype`                                                                                                | `shape`, `channel_names`, `fill_sentinel_meaning` = `"absent"` | [§7.8](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#78-object-attributes)                         |
-| `groups`                | `num_groups`                                                                                                   | `group_ranges`                                                 | [§7.4](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#74-groups)                                    |
-| `group_attribute`       | `name`, `dtype`                                                                                                | `shape`, `channel_names`                                       | [§7.4](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#74-groups)                                    |
+| `kind`                  | Required fields                                                                                                                                          | Optional fields                                                                     | Format spec                                                                                                                                                              |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `vertices`              | `dtype`, `encoding` (`"raw"` \| `"draco"`)                                                                                                               | `shape`, `compression_codec`                                                        | [§7.1](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#71-vertex-positions)                          |
+| `vertex_fragments`      | `encoding` = `"fragment_index_v1"`                                                                                                                       | —                                                                                   | [§7.3](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#73-vertex-fragments)                          |
+| `link_fragments`        | `encoding` = `"fragment_index_v1"`                                                                                                                       | —                                                                                   | [§7.5](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#75-vertex-links)                              |
+| `links_family`          | `level_delta`, `link_width`, `directed`, `store` (`"canonical"` \| `"duplicate"`)                                                                        | `sid_ndim`, `num_links`, `num_physical_records`                                     | [§10.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/10-cross-chunk-linking.md#106-on-disk-layout-the-links-family) |
+| `links`                 | `dtype`, `offsets`, `has_perm`, `link_width`, `level_delta`                                                                                              | —                                                                                   | [§10.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/10-cross-chunk-linking.md#106-on-disk-layout-the-links-family) |
+| `vertex_attribute`      | `name`, `dtype`, `row_shape`                                                                                                                             | `channel_names`, `channel_dtype`                                                    | [§7.2](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#72-vertex-attributes)                         |
+| `fragment_attribute`    | `name`, `dtype`, `row_shape`                                                                                                                             | `channel_names`, `channel_dtype`                                                    | not yet in the format spec ([open question](#open-questions))                                                                                                            |
+| `link_attribute_family` | `name`, `level_delta`                                                                                                                                    | —                                                                                   | [§7.7](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#77-link-attributes)                           |
+| `link_attribute`        | `name`, `dtype`, `row_shape`, `offsets`, `level_delta`                                                                                                   | `channel_names`                                                                     | [§7.7](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#77-link-attributes)                           |
+| `object_index`          | — (an index created before any object is written MAY carry only `kind`; once it holds manifests, `num_objects`, `sid_ndim` and `layout` MUST be present) | `layout` (`"vlen_manifests_v1"` \| `"vlen_manifests_v2"` \| `"dense_manifests_v1"`) | `num_objects`, `sid_ndim`, `num_present`, `object_ids_sorted`                                                                                                            | [§7.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#76-object-index) |
+| `object_attribute`      | `name`, `dtype`                                                                                                                                          | `shape`, `channel_names`, `fill_sentinel_meaning` = `"absent"`                      | [§7.8](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#78-object-attributes)                         |
+| `groups`                | `num_groups`                                                                                                                                             | `group_ranges`                                                                      | [§7.4](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#74-groups)                                    |
+| `group_attribute`       | `name`, `dtype`                                                                                                                                          | `shape`, `channel_names`                                                            | [§7.4](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#74-groups)                                    |
 
 The `object_index/manifests` and `object_index/object_ids` arrays carry no `zarr_vectors` attribute; their parent group describes them.
 
 #### Zarr array requirements
 
-The **per-chunk** kinds (`vertices`, `vertex_fragments`, `link_fragments`, `links`, `vertex_attribute`, `fragment_attribute`, `link_attribute`), and `groups`, are Zarr arrays with:
+The **per-chunk** kinds (`vertices`, `vertex_fragments`, `link_fragments`, `links`, `vertex_attribute`, `fragment_attribute`, `link_attribute`), `groups` and `parametric_names` are Zarr arrays with:
 
 - `data_type`: the zarr-extensions variable-length [`bytes`](https://github.com/zarr-developers/zarr-extensions/tree/main/data-types/bytes) type. Writers SHOULD spell it `"bytes"`. Readers MUST also accept `"variable_length_bytes"`, the spelling zarr-python 3.x writes.
 - a `vlen-bytes` codec, either directly in `codecs` or, for a sharded array, as a cell codec in the sharding codec's `configuration.codecs` (`sharding_indexed`, or the octree sharding codec).
@@ -282,16 +281,16 @@ The per-chunk kinds MAY also carry these fields. No other kind may carry them.
 
 The JSON schema validates one node at a time. These rules span nodes or fields, and validators such as `zarr_vectors.validate` in zarr-vectors-py check them:
 
-- `chunk_shape`, `base_bin_shape`, both `bounds` corners, and each `transform.scale` have one entry per `space` axis.
+- `chunk_shape`, `base_bin_shape`, both `bounds` corners, `coordinate_offset`, and each level's `bin_shape` and `bin_ratio` have one entry per `space` axis.
 - `chunk_shape / base_bin_shape` is an integer per axis, and each level's `chunk_shape` meets the multiple rules above.
 - The `multiscales` assets match the level groups one to one, and each level group's `level` equals its name.
-- The `derived_from` chain reaches `"0"` without cycles.
+- Each coarse level's `parent_level` names an existing level, the chain reaches level 0 without cycles, and `bin_ratio` equals `bin_shape / base_bin_shape`.
 - In `links`, `offsets` has `link_width - 1` entries, each of length `sid_ndim`, and `has_perm` follows the rule above.
 - Each per-chunk array's `shape` equals its level's chunk grid, and `nonempty_chunks` keys fall inside it.
 
 ## Composability
 
-- **multiscales**: the root's `multiscales` block is the registered multiscales convention, so generic multiscales tools can list the levels and their relative scales. Their `asset` entries point at groups, which that convention allows.
+- **multiscales**: the root's `multiscales` block is the registered multiscales convention, so generic multiscales tools can list the levels. Its `asset` entries point at groups, which that convention allows. It carries no transform, because vertex coordinates do not change between levels.
 - **proj**: coordinate reference systems use the proj convention on the root group; see [the geospatial example](examples/geospatial_root_group.json).
 - **OME-Zarr collections (RFC 8)**: the root MAY carry an `ome` object that is an OME-Zarr RFC 8 `collection` node, with one `zv:level` leaf per resolution level and a `scene` declaring a `world` coordinate system. It lets an OME collection elsewhere name this store by path. It only restates fields held in `zarr_vectors`, which stay authoritative. Readers of this convention MUST NOT depend on it.
 - **OME-NGFF**: a Zarr Vectors store is **not** an OME-Zarr image and does not carry NGFF metadata. NGFF's `multiscales.datasets` must point at image arrays, and its axes are limited to 2–3 space dimensions. Neither fits vector data, so earlier drafts that reused the NGFF block made generic NGFF viewers misread the store.
@@ -299,21 +298,24 @@ The JSON schema validates one node at a time. These rules span nodes or fields, 
 
 ## Migrating from format 0.9.2 metadata
 
+zarr-vectors-py implements this as `zarr_vectors.building.migrate_metadata_0_10(path)`, and refuses an unmigrated store with an error that names it.
+
 zarr-vectors-py 0.9.x (0.9.4 on `main`) writes an earlier, unregistered layout. Fields added in 0.9.3 and 0.9.4 (`shard_shape`, `octree_sharding`, `manifest_layout`, `manifest_block_dtype`, `required_capabilities`) keep their names and move with the rest of the root object. Only metadata moves; no cell is rewritten, so a store migrates in place by rewriting its `zarr.json` documents and setting `zv_version` to `"0.10.0"`:
 
-| 0.9.2 location                                                 | Convention 0.1.0 location                                                                                                                                 |
-| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| root `attributes.zarr_vectors.{…}`                             | `attributes.zarr_vectors.{kind: "root", …}`                                                                                                               |
-| root `attributes.zarr_vectors.crs`                             | `proj:projjson` (or `proj:code` / `proj:wkt2`) on the root, plus the proj registration                                                                    |
-| root `attributes.multiscales[0].axes`                          | `attributes.zarr_vectors.axes`                                                                                                                            |
-| root `attributes.multiscales[0].datasets[i]` (NGFF 0.4)        | `attributes.multiscales.layout[i]`: `asset` = `path`; `derived_from` = the level's `parent_level`; `transform.scale` = `bin_shape(i) / bin_shape(parent)` |
-| root `attributes.multiscales[0].metadata.format`               | dropped (`kind: "root"` identifies the store)                                                                                                             |
-| level `attributes.zarr_vectors_level.{…}`                      | `attributes.zarr_vectors.{kind: "level", …}`                                                                                                              |
-| level `zarr_vectors_level.parent_level`                        | the level's `multiscales.layout[i].derived_from`                                                                                                          |
-| array `attributes.zv_array` + bare fields (`dtype`, `name`, …) | `attributes.zarr_vectors.{kind, dtype, name, …}`                                                                                                          |
-| `zv_array: "attribute"`                                        | `kind: "vertex_attribute"`                                                                                                                                |
-| `zv_array: "groupings_attribute"`                              | `kind: "group_attribute"`                                                                                                                                 |
-| no registration                                                | `zarr_conventions` on every node above                                                                                                                    |
+| 0.9.2 location                                                 | Convention 0.1.0 location                                                                                                                                                                                                                     |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| root `attributes.zarr_vectors.{…}`                             | `attributes.zarr_vectors.{kind: "root", …}`                                                                                                                                                                                                   |
+| root `attributes.zarr_vectors.crs`                             | `proj:projjson` (or `proj:code` / `proj:wkt2`) on the root, plus the proj registration                                                                                                                                                        |
+| root `attributes.multiscales[0].axes`                          | `attributes.zarr_vectors.axes`                                                                                                                                                                                                                |
+| root `attributes.multiscales[0].datasets[i]` (NGFF 0.4)        | `attributes.multiscales.layout[i]` = `{"asset": path}`. A coarse level whose bins were only in its NGFF entry (stores older than per-level bins) gets them copied into its level object as `bin_ratio` = scale, `bin_shape` = 2 × translation |
+| root `attributes.multiscales[0].metadata.format`               | dropped (`kind: "root"` identifies the store)                                                                                                                                                                                                 |
+| level `attributes.zarr_vectors_level.{…}`                      | `attributes.zarr_vectors.{kind: "level", …}`                                                                                                                                                                                                  |
+| level top-level `zarr_vectors_presence`                        | the level object's `presence`                                                                                                                                                                                                                 |
+| array `attributes.zv_array` + bare fields (`dtype`, `name`, …) | `attributes.zarr_vectors.{kind, dtype, name, …}`                                                                                                                                                                                              |
+| `zv_array: "attribute"`                                        | `kind: "vertex_attribute"`                                                                                                                                                                                                                    |
+| `zv_array: "groupings_attribute"`                              | `kind: "group_attribute"`                                                                                                                                                                                                                     |
+| `parametric/` top-level `parametric_types`                     | `attributes.zarr_vectors.{kind: "parametric", parametric_types}`                                                                                                                                                                              |
+| no registration                                                | `zarr_conventions` on every node above                                                                                                                                                                                                        |
 
 ## Open Questions
 
@@ -325,7 +327,7 @@ zarr-vectors-py 0.9.x (0.9.4 on `main`) writes an earlier, unregistered layout. 
 
 ## Known Implementations
 
-No library emits this convention version yet.
+zarr-vectors-py implements this convention version on its `format-0.10-convention` branch (format 0.10.0), which also validates the stores its writers produce against this repository's schema in its test suite. No release emits it yet.
 
 - **zarr-vectors-py**: reference reader, writer and validator. Its current releases (format 0.9.2–0.9.4) write the pre-convention metadata layout described in [Migrating](#migrating-from-format-092-metadata).
   - Language: Python
