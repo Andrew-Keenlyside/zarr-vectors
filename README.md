@@ -145,7 +145,7 @@ The `zarr_vectors` object on the store root group. NGFF axes live in the sibling
 
 | Field Name              | Type                       | Description |
 | ----------------------- | -------------------------- | ----------- |
-| zv_version              | string                     | **REQUIRED**. Format version, `"X.Y.Z"`. This version of the convention covers `0.9.x`. |
+| zv_version              | string                     | **REQUIRED**. Format version, `"X.Y.Z"`. This version of the convention covers format `0.9.2` only; each format version has its own tag and schema. |
 | chunk_shape             | \[number]                  | **REQUIRED**. Level-0 chunk edge lengths, one positive entry per space axis. |
 | bounds                  | \[\[number], \[number]]    | **REQUIRED**. Global `[min_corner, max_corner]` containing all data. Root-only; levels have no bounds. |
 | geometry_types          | \[string]                  | **REQUIRED**. Geometries present; see [geometry_types](#geometry_types). |
@@ -157,7 +157,7 @@ The `zarr_vectors` object on the store root group. NGFF axes live in the sibling
 | base_bin_shape          | \[number] \| null          | Level-0 bin edge lengths. `chunk_shape / base_bin_shape` MUST be an integer on every axis. When unset, there is one bin per chunk. |
 | cross_level_depth       | integer ≥ -1               | Largest \|delta\| materialised for cross-level link arrays: `0` disables them, `N` writes ±1…±N, and `-1` writes every adjacent pair of levels. Default `1`. |
 | cross_level_storage     | string                     | `"none"`, `"implicit"` or `"explicit"` (default). |
-| format_capabilities     | \[string]                  | Capability tokens the store uses; see [format_capabilities](#format_capabilities). Default `[]`. |
+| format_capabilities     | \[string]                  | **REQUIRED**. Capability tokens the store uses; see [format_capabilities](#format_capabilities). MUST contain `fragment_index`. |
 
 #### geometry_types
 

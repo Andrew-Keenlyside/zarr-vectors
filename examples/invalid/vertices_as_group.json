@@ -1,0 +1,19 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "zarr_conventions": [
+      {
+        "uuid": "66268a61-7833-4995-bbcb-233bb417dae5",
+        "schema_url": "https://raw.githubusercontent.com/Andrew-Keenlyside/zarr-vectors/refs/tags/v0.9.2/schema.json",
+        "spec_url": "https://github.com/Andrew-Keenlyside/zarr-vectors/blob/v0.9.2/README.md",
+        "name": "zarr_vectors",
+        "description": "Spatially chunked, multi-resolution N-dimensional vector data (point clouds, meshes, skeletons, streamlines, graphs)"
+      }
+    ],
+    "zv_array": "vertices",
+    "dtype": "float32",
+    "encoding": "raw",
+    "nonempty_chunks": ["0.0.0", "0.0.1", "0.1.0", "1.0.0", "4.4.4"]
+  }
+}

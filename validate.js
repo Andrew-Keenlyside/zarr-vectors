@@ -15,8 +15,19 @@ const schema = JSON.parse(fs.readFileSync(schemaPath, "utf8"));
 const data = JSON.parse(fs.readFileSync(dataPath, "utf8"));
 
 // Validate
-const ajv = new Ajv2020({ allErrors: true });
-const validate = ajv.compile(schema);
+const ajv = new Ajv2020({
+  allErrors: true,
+  strict: true,
+  strictRequired: false,
+  strictTuples: false,
+});
+let validate;
+try {
+  validate = ajv.compile(schema);
+} catch (error) {
+  console.error("💥 Schema failed to compile:", error.message);
+  process.exit(2);
+}
 const valid = validate(data);
 
 if (valid) {

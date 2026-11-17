@@ -25,6 +25,9 @@
       ],
       "geometry_types": [
         "point_cloud"
+      ],
+      "format_capabilities": [
+        "fragment_index"
       ]
     },
     "multiscales": [

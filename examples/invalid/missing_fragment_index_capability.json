@@ -1,0 +1,54 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "zarr_conventions": [
+      {
+        "uuid": "66268a61-7833-4995-bbcb-233bb417dae5"
+      }
+    ],
+    "zarr_vectors": {
+      "zv_version": "0.9.2",
+      "chunk_shape": [100.0, 100.0],
+      "bounds": [
+        [0, 0],
+        [100, 100]
+      ],
+      "geometry_types": ["point_cloud"],
+      "format_capabilities": ["preserved_object_ids"]
+    },
+    "multiscales": [
+      {
+        "version": "0.4",
+        "axes": [
+          {
+            "name": "y",
+            "type": "space"
+          },
+          {
+            "name": "x",
+            "type": "space"
+          }
+        ],
+        "datasets": [
+          {
+            "path": "0",
+            "coordinateTransformations": [
+              {
+                "type": "scale",
+                "scale": [1.0, 1.0]
+              },
+              {
+                "type": "translation",
+                "translation": [50.0, 50.0]
+              }
+            ]
+          }
+        ],
+        "metadata": {
+          "format": "zarr_vectors"
+        }
+      }
+    ]
+  }
+}
