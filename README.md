@@ -2,8 +2,8 @@
 
 - **UUID**: 66268a61-7833-4995-bbcb-233bb417dae5
 - **Name**: zarr_vectors
-- **Schema URL**: "https://raw.githubusercontent.com/AllenInstitute/zarr-vectors-convention/refs/tags/v0.1.0/schema.json"
-- **Spec URL**: "https://github.com/AllenInstitute/zarr-vectors-convention/blob/v0.1.0/README.md"
+- **Schema URL**: "https://raw.githubusercontent.com/Andrew-Keenlyside/zarr-vectors/refs/tags/v0.1.0/schema.json"
+- **Spec URL**: "https://github.com/Andrew-Keenlyside/zarr-vectors/blob/v0.1.0/README.md"
 - **Convention version**: 0.1.0, covering Zarr Vectors format **0.10.0**
 - **Format specification**: [Zarr Vectors format spec at commit `f587ec5`](https://github.com/AllenInstitute/zarr_vectors/tree/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs) ([rendered, unversioned](https://alleninstitute.github.io/zarr_vectors/))
 - **Scope**: Array, Group
@@ -42,8 +42,8 @@ Every node that carries a `zarr_vectors` attribute MUST list this convention in 
 
 ```json
 {
-  "schema_url": "https://raw.githubusercontent.com/AllenInstitute/zarr-vectors-convention/refs/tags/v0.1.0/schema.json",
-  "spec_url": "https://github.com/AllenInstitute/zarr-vectors-convention/blob/v0.1.0/README.md",
+  "schema_url": "https://raw.githubusercontent.com/Andrew-Keenlyside/zarr-vectors/refs/tags/v0.1.0/schema.json",
+  "spec_url": "https://github.com/Andrew-Keenlyside/zarr-vectors/blob/v0.1.0/README.md",
   "uuid": "66268a61-7833-4995-bbcb-233bb417dae5",
   "name": "zarr_vectors",
   "description": "Spatially chunked, multi-resolution N-dimensional vector data (point clouds, meshes, skeletons, streamlines, graphs)"
@@ -63,7 +63,7 @@ Two version numbers are involved, and they are independent:
   - MINOR: additions that leave every previously valid document valid, such as a new optional field or capability token.
   - MAJOR: anything else, including a new `kind` value, because readers MUST reject kinds they do not know.
   - While MAJOR is `0`, a MINOR bump MAY break compatibility.
-- **The format version** (`zarr_vectors.zv_version` on the root) versions the byte layouts inside the cells. Format versions so far have been hard breaks with no in-place migration ([Appendix J](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/15-appendices.md#appendix-j-change-log)).
+- **The format version** (`zarr_vectors.zv_version` on the root) versions the byte layouts inside the cells. Format versions before 0.10.0 were hard breaks that needed a rewrite; 0.9.x stores migrate to 0.10.0 in place, metadata only ([Appendix J](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/15-appendices.md#appendix-j-change-log)).
 
 Each convention version lists the format versions it covers:
 
@@ -73,7 +73,7 @@ Each convention version lists the format versions it covers:
 
 A reader MUST check `zv_version` and MUST NOT interpret cells of a format version it does not support.
 
-Format 0.10.0 is the first format version described by this convention. Its cell payloads are byte-for-byte those of format 0.9.2; it differs only in where the metadata lives (see [Migrating](#migrating-from-format-092-metadata)). Because a 0.9.2 reader looks up keys by their old locations, the move is a breaking change and takes a new format version: stamping `"0.9.2"` on the new layout would tell existing readers to parse it the old way.
+Format 0.10.0 is the first format version described by this convention. Its cell payloads are byte-for-byte those of format 0.9.4; it differs only in where the metadata lives (see [Migrating](#migrating-from-format-09x-metadata)). Because a 0.9.x reader looks up keys by their old locations, the move is a breaking change and takes a new format version: stamping a 0.9.x version on the new layout would tell existing readers to parse it the old way.
 
 ## Applicable To
 
@@ -296,13 +296,13 @@ The JSON schema validates one node at a time. These rules span nodes or fields, 
 - **OME-NGFF**: a Zarr Vectors store is **not** an OME-Zarr image and does not carry NGFF metadata. NGFF's `multiscales.datasets` must point at image arrays, and its axes are limited to 2–3 space dimensions. Neither fits vector data, so earlier drafts that reused the NGFF block made generic NGFF viewers misread the store.
 - **Extending Zarr Vectors**: the `zarr_vectors` object allows additional properties. Other conventions MAY add prefixed keys to it.
 
-## Migrating from format 0.9.2 metadata
+## Migrating from format 0.9.x metadata
 
 zarr-vectors-py implements this as `zarr_vectors.building.migrate_metadata_0_10(path)`, and refuses an unmigrated store with an error that names it.
 
 zarr-vectors-py 0.9.x (0.9.4 on `main`) writes an earlier, unregistered layout. Fields added in 0.9.3 and 0.9.4 (`shard_shape`, `octree_sharding`, `manifest_layout`, `manifest_block_dtype`, `required_capabilities`) keep their names and move with the rest of the root object. Only metadata moves; no cell is rewritten, so a store migrates in place by rewriting its `zarr.json` documents and setting `zv_version` to `"0.10.0"`:
 
-| 0.9.2 location                                                 | Convention 0.1.0 location                                                                                                                                                                                                                     |
+| 0.9.x location                                                 | Convention 0.1.0 location                                                                                                                                                                                                                     |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | root `attributes.zarr_vectors.{…}`                             | `attributes.zarr_vectors.{kind: "root", …}`                                                                                                                                                                                                   |
 | root `attributes.zarr_vectors.crs`                             | `proj:projjson` (or `proj:code` / `proj:wkt2`) on the root, plus the proj registration                                                                                                                                                        |
@@ -319,8 +319,8 @@ zarr-vectors-py 0.9.x (0.9.4 on `main`) writes an earlier, unregistered layout. 
 
 ## Open Questions
 
-1. **Spec and implementation disagree.** zarr-vectors-py writes `object_index.layout` values `"vlen_manifests_v2"` and `"dense_manifests_v1"`, `fragment_attributes/<name>` arrays and octree-chunked levels, but the format specification at the pinned commit defines only `vlen_manifests_v1` and covers none of the others. This convention accepts what the reference writer produces. The format specification needs updating before this convention can leave Proposal.
-2. **Format spec versioning.** The format spec repository has no tags, so links are pinned to commit `f587ec5`. Format 0.10.0 reuses the 0.9.2 cell layouts, so this commit stays correct for the payloads; the links should move to a tag once the format spec repository has one.
+1. **Spec and implementation disagree.** zarr-vectors-py writes `object_index.layout` values `"vlen_manifests_v2"` and `"dense_manifests_v1"`, `fragment_attributes/<name>` arrays and octree-chunked levels, but the format specification at the pinned commit defines only `vlen_manifests_v1` and covers none of the others. This convention accepts what the reference writer produces. The format specification's `spec-0.10` branch covers all of these; the links move to it once it merges.
+2. **Format spec versioning.** The format spec repository has no tags, so links are pinned to commit `f587ec5`. Format 0.10.0 reuses the 0.9.4 cell layouts, which that commit does not fully describe (see question 1); the links should move to a tag once the format spec repository has one.
 3. **Format spec licence.** The format specification is published under the Allen Institute Software License, which prohibits commercial use. A community convention that normatively references it will need it under a permissive licence (for example CC-BY-4.0).
 4. **`bounds` inclusivity.** Neither this convention nor the format spec says whether `max_corner` is inclusive. With `bounds` 0–1000 and `chunk_shape` 200, the answer decides whether chunk index 5 exists.
 5. **`bytes` vs `variable_length_bytes`.** Writers SHOULD use the registered name, but zarr-python 3.x writes the other. Readers must accept both until zarr-python changes.
@@ -329,7 +329,7 @@ zarr-vectors-py 0.9.x (0.9.4 on `main`) writes an earlier, unregistered layout. 
 
 zarr-vectors-py implements this convention version on its `format-0.10-convention` branch (format 0.10.0), which also validates the stores its writers produce against this repository's schema in its test suite. No release emits it yet.
 
-- **zarr-vectors-py**: reference reader, writer and validator. Its current releases (format 0.9.2–0.9.4) write the pre-convention metadata layout described in [Migrating](#migrating-from-format-092-metadata).
+- **zarr-vectors-py**: reference reader, writer and validator. Its current releases (format 0.9.2–0.9.4) write the pre-convention metadata layout described in [Migrating](#migrating-from-format-09x-metadata).
   - Language: Python
   - Repository: https://github.com/AllenInstitute/zarr-vectors-py
   - Status: Experimental
