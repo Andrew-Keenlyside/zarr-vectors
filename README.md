@@ -2,10 +2,11 @@
 
 - **UUID**: 66268a61-7833-4995-bbcb-233bb417dae5
 - **Name**: zarr_vectors
-- **Schema URL**: "https://raw.githubusercontent.com/AllenInstitute/zarr-vectors-convention/refs/tags/v0.1.0/schema.json"
-- **Spec URL**: "https://github.com/AllenInstitute/zarr-vectors-convention/blob/v0.1.0/README.md"
+- **Schema URL**: "https://raw.githubusercontent.com/Andrew-Keenlyside/zarr-vectors/refs/tags/v0.1.0/schema.json"
+- **Spec URL**: "https://github.com/Andrew-Keenlyside/zarr-vectors/blob/v0.1.0/README.md"
 - **Convention version**: 0.1.0, covering Zarr Vectors format **0.10.0**
 - **Format specification**: [Zarr Vectors format spec at commit `f587ec5`](https://github.com/AllenInstitute/zarr_vectors/tree/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs) ([rendered, unversioned](https://alleninstitute.github.io/zarr_vectors/))
+- **Schema source**: generated from the [LinkML model](https://github.com/AllenInstitute/zarr_vectors/tree/main/convention) in AllenInstitute/zarr_vectors
 - **Scope**: Array, Group
 - **Extension Maturity Classification**: Proposal
 - **Owner**: @Andrew-Keenlyside, @fcollman
@@ -42,8 +43,8 @@ Every node that carries a `zarr_vectors` attribute MUST list this convention in 
 
 ```json
 {
-  "schema_url": "https://raw.githubusercontent.com/AllenInstitute/zarr-vectors-convention/refs/tags/v0.1.0/schema.json",
-  "spec_url": "https://github.com/AllenInstitute/zarr-vectors-convention/blob/v0.1.0/README.md",
+  "schema_url": "https://raw.githubusercontent.com/Andrew-Keenlyside/zarr-vectors/refs/tags/v0.1.0/schema.json",
+  "spec_url": "https://github.com/Andrew-Keenlyside/zarr-vectors/blob/v0.1.0/README.md",
   "uuid": "66268a61-7833-4995-bbcb-233bb417dae5",
   "name": "zarr_vectors",
   "description": "Spatially chunked, multi-resolution N-dimensional vector data (point clouds, meshes, skeletons, streamlines, graphs)"
@@ -61,9 +62,9 @@ Two version numbers are involved, and they are independent:
 - **The convention version** (`X.Y.Z`, the git tag in the schema and spec URLs) versions this metadata contract. It follows semantic versioning:
   - PATCH: clarifications and fixes that do not change which documents the schema accepts.
   - MINOR: additions that leave every previously valid document valid, such as a new optional field or capability token.
-  - MAJOR: anything else, including a new `kind` value, because readers MUST reject kinds they do not know.
+  - MAJOR: anything else, including a new `kind` value, because readers SHOULD reject kinds they do not know.
   - While MAJOR is `0`, a MINOR bump MAY break compatibility.
-- **The format version** (`zarr_vectors.zv_version` on the root) versions the byte layouts inside the cells. Format versions so far have been hard breaks with no in-place migration ([Appendix J](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/15-appendices.md#appendix-j-change-log)).
+- **The format version** (`zarr_vectors.zv_version` on the root) versions the byte layouts inside the cells. Format versions before 0.10.0 were hard breaks that needed a rewrite; 0.9.x stores migrate to 0.10.0 in place, metadata only ([Appendix J](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/15-appendices.md#appendix-j-change-log)).
 
 Each convention version lists the format versions it covers:
 
@@ -73,7 +74,7 @@ Each convention version lists the format versions it covers:
 
 A reader MUST check `zv_version` and MUST NOT interpret cells of a format version it does not support.
 
-Format 0.10.0 is the first format version described by this convention. Its cell payloads are byte-for-byte those of format 0.9.2; it differs only in where the metadata lives (see [Migrating](#migrating-from-format-092-metadata)). Because a 0.9.2 reader looks up keys by their old locations, the move is a breaking change and takes a new format version: stamping `"0.9.2"` on the new layout would tell existing readers to parse it the old way.
+Format 0.10.0 is the first format version described by this convention. Its cell payloads are byte-for-byte those of format 0.9.4; it differs only in where the metadata lives (see [Migrating](#migrating-from-format-09x-metadata)). Because a 0.9.x reader looks up keys by their old locations, the move is a breaking change and takes a new format version: stamping a 0.9.x version on the new layout would tell existing readers to parse it the old way.
 
 ## Applicable To
 
@@ -107,7 +108,7 @@ This convention uses the **nested pattern**. All of its properties live in one o
 | `parametric_objects`    | `num_objects`                                      | `max_row_length`, `dtype` | not yet in the format spec                                |
 | `parametric_names`      | `num_objects`                                      | —                         | not yet in the format spec                                |
 
-A reader MUST reject a node whose `kind` it does not recognise. Within the `zarr_vectors` object, readers SHOULD ignore fields they do not recognise, and other conventions MAY add prefixed fields (for example `proj:` keys).
+A reader SHOULD reject a node whose `kind` it does not recognise, and MUST NOT interpret it as a known kind. Within the `zarr_vectors` object, readers SHOULD ignore fields they do not recognise, and other conventions MAY add prefixed fields (for example `proj:` keys).
 
 **Example** (store root):
 
@@ -154,8 +155,8 @@ A reader MUST reject a node whose `kind` it does not recognise. Within the `zarr
 | ----------------------- | ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | kind                    | `"root"`                  | **REQUIRED**.                                                                                                                                                                                                                                                                                                                                                  |
 | zv_version              | string                    | **REQUIRED**. Format version. Convention 0.1.0 accepts `"0.10.0"` only.                                                                                                                                                                                                                                                                                        |
-| axes                    | \[object]                 | **REQUIRED**. One `{name, type, unit?}` per coordinate axis, in the order `time → channel → custom → space`. `type` is `space`, `time`, `channel` or `custom`, and at least one axis MUST be `space`. `sid_ndim`, the number of spatial-index dimensions, is the number of `space` axes. `unit` is a UDUNITS-2 name; writers MUST NOT stamp placeholder units. |
-| chunk_shape             | \[number]                 | **REQUIRED**. Level-0 chunk edge lengths, one positive entry per space axis.                                                                                                                                                                                                                                                                                   |
+| axes                    | \[object]                 | **REQUIRED**. One `{name, type, unit?}` per coordinate axis, in the order `time → channel → custom → space`. `type` is `space`, `time`, `channel` or `custom`, axis names MUST be unique, and at least two axes MUST be `space`. `sid_ndim`, the number of spatial-index dimensions and the rank of every per-chunk array, is the number of axes of every type (an `x, y, z, t` store has 4). The schema checks only that one `space` axis exists. `unit` is a UDUNITS-2 name; writers MUST NOT stamp placeholder units. |
+| chunk_shape             | \[number]                 | **REQUIRED**. Level-0 chunk edge lengths, one positive entry per axis (`sid_ndim` entries).                                                                                                                                                                                                                                                                                   |
 | bounds                  | \[\[number], \[number]]   | **REQUIRED**. Global `[min_corner, max_corner]` containing all data. Root-only.                                                                                                                                                                                                                                                                                |
 | geometry_types          | \[string]                 | **REQUIRED**. Geometries present; empty in a store that holds no data yet. Canonical values: `point_cloud`, `line`, `polyline`, `streamline`, `skeleton`, `graph`, `mesh`. Writers MAY add others; a reader SHOULD treat an unknown geometry as raw vertex and link arrays.                                                                                    |
 | base_bin_shape          | \[number]                 | Level-0 bin edge lengths. `chunk_shape / base_bin_shape` MUST be an integer on every axis. Default: `chunk_shape` (one bin per chunk).                                                                                                                                                                                                                         |
@@ -174,7 +175,7 @@ A reader MUST reject a node whose `kind` it does not recognise. Within the `zarr
 | manifest_block_dtype    | string                    | `"int64"` (default) or `"int32"`, for the `manifest_blocks` of new dense indexes.                                                                                                                                                                                                                                                                              |
 | required_capabilities   | \[string]                 | Capability tokens a reader MUST support to read the store at all. Each also appears in `format_capabilities`.                                                                                                                                                                                                                                                  |
 
-There is no `crs` field. A store with a coordinate reference system records it with the [proj](https://github.com/zarr-conventions/proj) convention (`proj:code`, `proj:wkt2` or `proj:projjson`) on the root group.
+There is no `crs` field. A store with a coordinate reference system records it as `proj:projjson` on the root group, defined by the [proj](https://github.com/zarr-conventions/proj) convention. Writers write `proj:projjson` only; a reader MAY also accept the proj convention's `proj:code` and `proj:wkt2`.
 
 #### format_capabilities
 
@@ -188,7 +189,7 @@ There is no `crs` field. A store with a coordinate reference system records it w
 | `octree_sharding`      | Sharded per-chunk arrays use the octree sharding codec instead of `sharding_indexed`; reading them needs that codec.                                                                                                                                                         |
 | `octree_chunks`        | A level stores one cell per octree leaf rather than per uniform chunk. A reader without this capability MUST NOT read such a level. Its per-chunk arrays also carry the `zarr_vectors_octree_chunks` marker codec, so a plain Zarr reader stops rather than misreading them. |
 
-The set is open. A reader that meets an unknown token MUST either treat the feature as absent or refuse to open the store; it MUST NOT assume the feature is present. A reader MUST refuse to open a store whose `required_capabilities` lists a token it does not support.
+The set is open. A reader that meets an unknown token MUST either treat the feature as absent or refuse to open the store; it MUST NOT assume the feature is present. A reader SHOULD refuse to open a store whose `required_capabilities` lists a token it does not support, and MUST NOT read the parts of the store that need it.
 
 ### Multiscales
 
@@ -235,21 +236,21 @@ Bin geometry is Zarr Vectors' own and is stored once, outside this block: level 
 
 ### Array and Family Metadata
 
-| `kind`                  | Required fields                                                                                                                                          | Optional fields                                                                     | Format spec                                                                                                                                                              |
+| `kind` | Required fields | Optional fields | Format spec |
 | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| `vertices`              | `dtype`, `encoding` (`"raw"` \| `"draco"`)                                                                                                               | `shape`, `compression_codec`                                                        | [§7.1](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#71-vertex-positions)                          |
-| `vertex_fragments`      | `encoding` = `"fragment_index_v1"`                                                                                                                       | —                                                                                   | [§7.3](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#73-vertex-fragments)                          |
-| `link_fragments`        | `encoding` = `"fragment_index_v1"`                                                                                                                       | —                                                                                   | [§7.5](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#75-vertex-links)                              |
-| `links_family`          | `level_delta`, `link_width`, `directed`, `store` (`"canonical"` \| `"duplicate"`)                                                                        | `sid_ndim`, `num_links`, `num_physical_records`                                     | [§10.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/10-cross-chunk-linking.md#106-on-disk-layout-the-links-family) |
-| `links`                 | `dtype`, `offsets`, `has_perm`, `link_width`, `level_delta`                                                                                              | —                                                                                   | [§10.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/10-cross-chunk-linking.md#106-on-disk-layout-the-links-family) |
-| `vertex_attribute`      | `name`, `dtype`, `row_shape`                                                                                                                             | `channel_names`, `channel_dtype`                                                    | [§7.2](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#72-vertex-attributes)                         |
-| `fragment_attribute`    | `name`, `dtype`, `row_shape`                                                                                                                             | `channel_names`, `channel_dtype`                                                    | not yet in the format spec ([open question](#open-questions))                                                                                                            |
-| `link_attribute_family` | `name`, `level_delta`                                                                                                                                    | —                                                                                   | [§7.7](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#77-link-attributes)                           |
-| `link_attribute`        | `name`, `dtype`, `row_shape`, `offsets`, `level_delta`                                                                                                   | `channel_names`                                                                     | [§7.7](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#77-link-attributes)                           |
-| `object_index`          | — (an index created before any object is written MAY carry only `kind`; once it holds manifests, `num_objects`, `sid_ndim` and `layout` MUST be present) | `layout` (`"vlen_manifests_v1"` \| `"vlen_manifests_v2"` \| `"dense_manifests_v1"`) | `num_objects`, `sid_ndim`, `num_present`, `object_ids_sorted`                                                                                                            | [§7.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#76-object-index) |
-| `object_attribute`      | `name`, `dtype`                                                                                                                                          | `shape`, `channel_names`, `fill_sentinel_meaning` = `"absent"`                      | [§7.8](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#78-object-attributes)                         |
-| `groups`                | `num_groups`                                                                                                                                             | `group_ranges`                                                                      | [§7.4](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#74-groups)                                    |
-| `group_attribute`       | `name`, `dtype`                                                                                                                                          | `shape`, `channel_names`                                                            | [§7.4](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#74-groups)                                    |
+| `vertices` | `dtype`, `encoding` (`"raw"` \| `"draco"`) | `shape`, `compression_codec` | [§7.1](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#71-vertex-positions) |
+| `vertex_fragments` | `encoding` = `"fragment_index_v1"` | — | [§7.3](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#73-vertex-fragments) |
+| `link_fragments` | `encoding` = `"fragment_index_v1"` | — | [§7.5](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#75-vertex-links) |
+| `links_family` | `level_delta`, `link_width`, `directed`, `store` (`"canonical"` \| `"duplicate"`) | `sid_ndim`, `num_links`, `num_physical_records` | [§10.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/10-cross-chunk-linking.md#106-on-disk-layout-the-links-family) |
+| `links` | `dtype`, `offsets`, `has_perm`, `link_width`, `level_delta` | — | [§10.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/10-cross-chunk-linking.md#106-on-disk-layout-the-links-family) |
+| `vertex_attribute` | `name`, `dtype`, `row_shape` | `channel_names`, `channel_dtype` | [§7.2](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#72-vertex-attributes) |
+| `fragment_attribute` | `name`, `dtype`, `row_shape` | `channel_names`, `channel_dtype` | not yet in the format spec ([open question](#open-questions)) |
+| `link_attribute_family` | `name`, `level_delta` | — | [§7.7](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#77-link-attributes) |
+| `link_attribute` | `name`, `dtype`, `row_shape`, `offsets`, `level_delta` | `channel_names` | [§7.7](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#77-link-attributes) |
+| `object_index` | — (an index created before any object is written MAY carry only `kind`; once it holds manifests, `num_objects`, `sid_ndim` and `layout` MUST be present) | `layout` (`"vlen_manifests_v1"` \| `"vlen_manifests_v2"` \| `"dense_manifests_v1"`), `num_objects`, `sid_ndim`, `num_present`, `object_ids_sorted` | [§7.6](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#76-object-index) |
+| `object_attribute` | `name`, `dtype` | `shape`, `channel_names`, `fill_sentinel_meaning` = `"absent"` | [§7.8](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#78-object-attributes) |
+| `groups` | `num_groups` | `group_ranges` | [§7.4](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#74-groups) |
+| `group_attribute` | `name`, `dtype` | `shape`, `channel_names` | [§7.4](https://github.com/AllenInstitute/zarr_vectors/blob/f587ec5e6d9f978a2705c7f8920df04bc08fe428/docs/07-core-arrays.md#74-groups) |
 
 The `object_index/manifests` and `object_index/object_ids` arrays carry no `zarr_vectors` attribute; their parent group describes them.
 
@@ -296,16 +297,16 @@ The JSON schema validates one node at a time. These rules span nodes or fields, 
 - **OME-NGFF**: a Zarr Vectors store is **not** an OME-Zarr image and does not carry NGFF metadata. NGFF's `multiscales.datasets` must point at image arrays, and its axes are limited to 2–3 space dimensions. Neither fits vector data, so earlier drafts that reused the NGFF block made generic NGFF viewers misread the store.
 - **Extending Zarr Vectors**: the `zarr_vectors` object allows additional properties. Other conventions MAY add prefixed keys to it.
 
-## Migrating from format 0.9.2 metadata
+## Migrating from format 0.9.x metadata
 
 zarr-vectors-py implements this as `zarr_vectors.building.migrate_metadata_0_10(path)`, and refuses an unmigrated store with an error that names it.
 
 zarr-vectors-py 0.9.x (0.9.4 on `main`) writes an earlier, unregistered layout. Fields added in 0.9.3 and 0.9.4 (`shard_shape`, `octree_sharding`, `manifest_layout`, `manifest_block_dtype`, `required_capabilities`) keep their names and move with the rest of the root object. Only metadata moves; no cell is rewritten, so a store migrates in place by rewriting its `zarr.json` documents and setting `zv_version` to `"0.10.0"`:
 
-| 0.9.2 location                                                 | Convention 0.1.0 location                                                                                                                                                                                                                     |
+| 0.9.x location                                                 | Convention 0.1.0 location                                                                                                                                                                                                                     |
 | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | root `attributes.zarr_vectors.{…}`                             | `attributes.zarr_vectors.{kind: "root", …}`                                                                                                                                                                                                   |
-| root `attributes.zarr_vectors.crs`                             | `proj:projjson` (or `proj:code` / `proj:wkt2`) on the root, plus the proj registration                                                                                                                                                        |
+| root `attributes.zarr_vectors.crs`                             | `proj:projjson` on the root, plus the proj registration                                                                                                                                                        |
 | root `attributes.multiscales[0].axes`                          | `attributes.zarr_vectors.axes`                                                                                                                                                                                                                |
 | root `attributes.multiscales[0].datasets[i]` (NGFF 0.4)        | `attributes.multiscales.layout[i]` = `{"asset": path}`. A coarse level whose bins were only in its NGFF entry (stores older than per-level bins) gets them copied into its level object as `bin_ratio` = scale, `bin_shape` = 2 × translation |
 | root `attributes.multiscales[0].metadata.format`               | dropped (`kind: "root"` identifies the store)                                                                                                                                                                                                 |
@@ -319,8 +320,8 @@ zarr-vectors-py 0.9.x (0.9.4 on `main`) writes an earlier, unregistered layout. 
 
 ## Open Questions
 
-1. **Spec and implementation disagree.** zarr-vectors-py writes `object_index.layout` values `"vlen_manifests_v2"` and `"dense_manifests_v1"`, `fragment_attributes/<name>` arrays and octree-chunked levels, but the format specification at the pinned commit defines only `vlen_manifests_v1` and covers none of the others. This convention accepts what the reference writer produces. The format specification needs updating before this convention can leave Proposal.
-2. **Format spec versioning.** The format spec repository has no tags, so links are pinned to commit `f587ec5`. Format 0.10.0 reuses the 0.9.2 cell layouts, so this commit stays correct for the payloads; the links should move to a tag once the format spec repository has one.
+1. **Spec and implementation disagree.** zarr-vectors-py writes `object_index.layout` values `"vlen_manifests_v2"` and `"dense_manifests_v1"`, `fragment_attributes/<name>` arrays and octree-chunked levels, but the format specification at the pinned commit defines only `vlen_manifests_v1` and covers none of the others. This convention accepts what the reference writer produces. The format specification's `spec-0.10` branch covers all of these; the links move to it once it merges.
+2. **Format spec versioning.** The format spec repository has no tags, so links are pinned to commit `f587ec5`. Format 0.10.0 reuses the 0.9.4 cell layouts, which that commit does not fully describe (see question 1); the links should move to a tag once the format spec repository has one.
 3. **Format spec licence.** The format specification is published under the Allen Institute Software License, which prohibits commercial use. A community convention that normatively references it will need it under a permissive licence (for example CC-BY-4.0).
 4. **`bounds` inclusivity.** Neither this convention nor the format spec says whether `max_corner` is inclusive. With `bounds` 0–1000 and `chunk_shape` 200, the answer decides whether chunk index 5 exists.
 5. **`bytes` vs `variable_length_bytes`.** Writers SHOULD use the registered name, but zarr-python 3.x writes the other. Readers must accept both until zarr-python changes.
@@ -329,7 +330,7 @@ zarr-vectors-py 0.9.x (0.9.4 on `main`) writes an earlier, unregistered layout. 
 
 zarr-vectors-py implements this convention version on its `format-0.10-convention` branch (format 0.10.0), which also validates the stores its writers produce against this repository's schema in its test suite. No release emits it yet.
 
-- **zarr-vectors-py**: reference reader, writer and validator. Its current releases (format 0.9.2–0.9.4) write the pre-convention metadata layout described in [Migrating](#migrating-from-format-092-metadata).
+- **zarr-vectors-py**: reference reader, writer and validator. Its current releases (format 0.9.2–0.9.4) write the pre-convention metadata layout described in [Migrating](#migrating-from-format-09x-metadata).
   - Language: Python
   - Repository: https://github.com/AllenInstitute/zarr-vectors-py
   - Status: Experimental
@@ -340,7 +341,7 @@ zarr-vectors-py implements this convention version on its `format-0.10-conventio
   - Status: Experimental
   - Maintainer: @Andrew-Keenlyside
 
-The JSON schema in this repository is the normative definition of this metadata. Where the LinkML schema in zarr-vectors-py disagrees with it, this repository wins.
+The JSON schema in this repository is the normative definition of this metadata. It is generated from a [LinkML model](https://github.com/AllenInstitute/zarr_vectors/tree/main/convention) kept beside the format spec in AllenInstitute/zarr_vectors; change the model there and copy the generated `schema.json` and examples here, never edit `schema.json` by hand. Where any other LinkML schema, such as the one in zarr-vectors-py, disagrees with this repository's `schema.json`, this repository wins.
 
 ### Datasets Using This Convention
 
